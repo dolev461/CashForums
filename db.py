@@ -57,9 +57,9 @@ class DBUser(object):
         if not user:
             raise UserNotExistError()
 
-        fdb.users.update({'phone': phone}, {
+        fdb.users.update({'phone': phone}, {'$set': {
             'id': self._id,
-        })
+        }})
 
     def exists(self):
         user = fdb.users.find_one(self._selector)
