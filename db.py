@@ -13,44 +13,65 @@ class UserNotExistError(Exception):
 class UserNameMissingError(Exception):
     pass
 
-class DBUser(object):
-    def __init__(self, phone, create=False, name=None):
-        self._phone = phone
-        self._selector = {'phone': self._phone}
+class PhoneMissingError(Exception):
+    pass
 
-        if create:
-            self._create_user(name)
-        self.data() # validate existence
+class UserAlreadyExists(Exception):
+    pass
+
+class CreateUserNotAllowed(Exception):
+    pass
+
+class DBUser(object):
+    @staticmethod
+    def create_pending_user(phone, name):
+        user = fdb.users.find_one({'phone': phone})
+        if (user):
+            raise UserAlreadyExists()
+
+        fdb.users.insert_one({
+            'phone': phone,
+            'name': name,
+            'admin': False,
+        })
 
     @staticmethod
-    def exists(**args):
-        user = fdb.users.find_one(args)
-        return user
+    def from_phone(phone):
+        user = fdb.users.find_one({'phone': phone})
+        return user 
 
-    def _create_user(self, name):
-        if not name:
-            raise UserNameMissingError()
-        user = fdb.users.find_one(self._selector)
+    def __init__(self, id, create=False, phone=None):
+        self._id = id
+        self._selector = {'id': id}
+
+        if create:
+            self._initialize_pending_user(id, phone)
+        if not self.exists():
+            raise UserNotExistError()
+
+    def _initialize_pending_user(self, id, phone):
+        if not phone:
+            raise PhoneMissingError()
+
+        user = fdb.users.find_one({'phone': phone})
         if not user:
-            fdb.users.insert_one({
-                'name': name,
-                'phone': self._phone,
-                'admin': False,
-            })
-        return user
+            raise UserNotExistError()
+
+        fdb.users.update({'phone': phone}, {
+            'id': self._id,
+        })
+
+    def exists(self):
+        user = fdb.users.find_one(self._selector)
+        if user:
+            return True
+        return False
 
     def data(self):
         user = fdb.users.find_one(self._selector)
         if not user:
             raise UserNotExistError()
         return user
-
-    def add_to_group(self, group):
-        group = fdb.groups.find_one({'name': group})
-        if not group:
-            raise GroupNotExistError()
-        
-        fdb.groups.update({'name': group}, {'$push': {'users': self._phone}})
 
 class Group(object):
     def __init__(self, name, create=False, admin=None):
@@ -60,7 +81,8 @@ class Group(object):
 
         if create:
             self._create_group()
-        self.data() # A way to validate existence
+        if not self.exists():
+            raise GroupNotExistError()
 
     def _create_group(self): 
         group = fdb.groups.find_one(self._selector)
@@ -72,27 +94,40 @@ class Group(object):
             })
         return group
     
+    def exists(self):
+        group = fdb.groups.find_one(self._selector)
+        if not group:
+            return False
+        return True
+
     def data(self):
         group = fdb.groups.find_one(self._selector)
         if not group:
             raise GroupNotExistError()
         return group
     
-    def add_user(self, phone, create=False, name=None):
-        user = DBUser(phone, create, name)
-
+    def add_user(self, id):
+        user = DBUser(id)
+        phone = user.data()['phone']
+        self.add_user_by_phone(phone)
+    
+    def add_user_by_phone(self, phone):
         if not self.has_user(phone):
             fdb.groups.update(self._selector, {'$push': {'users': phone}})
     
-    def remove_user(self, phone):
-        user = DBUser(phone)
+    def remove_user(self, id):
+        user = DBUser(id)
+        phone = user.data()['phone']
 
         if self.has_user(phone):
             fdb.groups.update(self._selector, {'$pull': {'users': phone}})
     
-    def has_user(self, phone):
+    def has_user(self, id):
+        user = DBUser(id)
+        phone = user.data()['phone']
+
         return phone in self.data()['users']
 
     def get_users(self):
-        return [DBUser(phone) for phone in self.data()['users']]
+        return [DBUser.from_phone(phone) for phone in self.data()['users']]
 
