@@ -109,3 +109,4 @@ dist
 # Cache files
 __pycache__/
 .handler-saves/
+.pyc
