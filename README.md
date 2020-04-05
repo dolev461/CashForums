@@ -18,4 +18,5 @@ What things you need to install the software and how to install them:
 
 ## Authors
 
-* **Billie Thompson** - *Initial work* - [PurpleBooth](https://github.com/PurpleBooth)
+- **Dolev Zoozel**
+- **Amita Chita**
