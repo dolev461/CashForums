@@ -40,12 +40,12 @@ def process_phone_number(message):
 
         try:
             manager.add_user(chat_id, message.contact.phone_number)
+            end_session(message, chat_id)
         except bot_manager.UserNotInvited:
             bot.send_message(
                 chat_id,
                 "לא הוזמנת :(\nהאחראי פורומים זה הכתובת שלך")
 
-        end_session(message, chat_id)
     except Exception as e:
         bot.reply_to(message, "אוי לא " + str(e))
 
