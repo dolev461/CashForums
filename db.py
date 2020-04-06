@@ -82,10 +82,12 @@ class DBUser(object):
         if not user:
             raise UserNotExistError()
 
-        if user['id'] != id:
-            fdb.users.update({'phone': phone}, {'$set': {
-                'id': self._id,
-            }})
+        if 'id' in user:
+            raise UserAlreadyExistsError()
+
+        fdb.users.update({'phone': phone}, {'$set': {
+            'id': self._id,
+        }})
 
     def delete(self):
         fdb.users.delete_one(self._selector)
