@@ -35,7 +35,7 @@ class GroupAlreadyExistsError(Exception):
 class DBUser(object):
     @staticmethod
     def all_users():
-        users = [DBUser(x['id']) for x in fdb.users.find({})]
+        users = [DBUser(x['id']) for x in fdb.users.find({}) if (x['id'])]
         return users
 
     @staticmethod
@@ -72,9 +72,10 @@ class DBUser(object):
         if not user:
             raise UserNotExistError()
 
-        fdb.users.update({'phone': phone}, {'$set': {
-            'id': self._id,
-        }})
+        if user['id'] != id:
+            fdb.users.update({'phone': phone}, {'$set': {
+                'id': self._id,
+            }})
 
     def exists(self):
         user = fdb.users.find_one(self._selector)
