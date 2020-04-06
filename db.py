@@ -1,3 +1,4 @@
+import time
 import pymongo
 from config import config
 
@@ -16,18 +17,32 @@ class UserNameMissingError(Exception):
 class PhoneMissingError(Exception):
     pass
 
-class UserAlreadyExists(Exception):
+class UserAlreadyExistsError(Exception):
     pass
 
-class CreateUserNotAllowed(Exception):
+class CreateUserNotAllowedError(Exception):
+    pass
+
+class UserNotInGroupError(Exception):
+    pass
+
+class UserAlreadyInGroupError(Exception):
+    pass
+
+class GroupAlreadyExistsError(Exception):
     pass
 
 class DBUser(object):
     @staticmethod
+    def all_users():
+        users = [DBUser(x['id']) for x in fdb.users.find({})]
+        return users
+
+    @staticmethod
     def create_pending_user(phone, name):
         user = fdb.users.find_one({'phone': phone})
         if (user):
-            raise UserAlreadyExists()
+            raise UserAlreadyExistsError()
 
         fdb.users.insert_one({
             'phone': phone,
@@ -74,6 +89,11 @@ class DBUser(object):
         return user
 
 class Group(object):
+    @staticmethod
+    def all_groups():
+        groups = [Group(x['name']) for x in fdb.groups.find({})]
+        return groups
+
     def __init__(self, name, create=False, admin=None):
         self._name = name
         self._admin = admin
@@ -86,12 +106,13 @@ class Group(object):
 
     def _create_group(self): 
         group = fdb.groups.find_one(self._selector)
-        if not group:
-            fdb.groups.insert_one({
-                'name': self._name,
-                'users': [],
-                'admin': self._admin,
-            })
+        if group:
+            raise GroupAlreadyExistsError()
+        fdb.groups.insert_one({
+            'name': self._name,
+            'users': [],
+            'admin': self._admin,
+        })
         return group
     
     def exists(self):
@@ -112,8 +133,9 @@ class Group(object):
         self.add_user_by_phone(phone)
     
     def add_user_by_phone(self, phone):
-        if not self.has_user(phone):
-            fdb.groups.update(self._selector, {'$push': {'users': phone}})
+        if self.has_user(phone):
+            raise UserAlreadyInGroupError('Cannot add the same user twice.')
+        fdb.groups.update(self._selector, {'$push': {'users': phone}})
     
     def remove_user(self, id):
         user = DBUser(id)
@@ -122,12 +144,28 @@ class Group(object):
         if self.has_user(phone):
             fdb.groups.update(self._selector, {'$pull': {'users': phone}})
     
-    def has_user(self, id):
-        user = DBUser(id)
-        phone = user.data()['phone']
-
+    def has_user(self, phone):
         return phone in self.data()['users']
 
     def get_users(self):
         return [DBUser.from_phone(phone) for phone in self.data()['users']]
+    
+    def bill_user(self, id, amount):
+        user = DBUser(id)
+        phone = user.data()['phone']
 
+        if not self.has_user(phone):
+            raise UserNotInGroupError()
+
+        fdb.bills.insert_one({
+            'user': id,
+            'group': self._name,
+            'amount': amount,
+            'time': time.time()
+        })
+    
+    def get_user_bill_history(self, id):
+        return [x for x in fdb.bills.find({'user': id, 'group': self._name})]
+    
+    def get_user_balance(self, id):
+        return sum([b['amount'] for b in self.get_user_bill_history(id)])
