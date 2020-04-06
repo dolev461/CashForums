@@ -1,31 +1,40 @@
 import telebot
-import user_details
+import config
+import db
+
+
+class UserNotExistError(Exception):
+    pass
 
 
 class BotManager(object):
-    API_TOKEN = '1187013257:AAGkU0Md05rHtEkBJ465AARklivI7nfDG1Q'
+    SAVE_NEXT_STEP_DELAY = 2  # Seconds
     WELCOME_MSG = ("שלום, אני בוט.\n"
                    "אני אעזור לך להתמודד עם הלחץ הנפשי של הפורומים.")
+    PLUS_MSG = "כל הכבוד! יש לך עודף של {}"
+    MINUS_MSG = "קודם כל.. בלי פאניקה! החוב שלך הוא {}"
+    NEUTRAL_MSG = "הכל טוב והמאזן מושלם"
 
     def __init__(self):
-        self.bot = telebot.TeleBot(self.API_TOKEN)
+        self.bot = telebot.TeleBot(config.config['API_TOKEN'])
         self._user_dict = {}
 
-    # error handling if user isn't known yet
-    # had to use the /start command and are therefore known to the bot
+    # Error handling if user isn't known yet
+    # Had to use the /start command and are therefore known to the bot
     def get_user(self, chat_id):
-        if chat_id in self._user_dict:
-            return self._user_dict[chat_id]
+        try:
+            user = db.DBUser(chat_id)
+        except db.UserNotExistError:
+            raise UserNotExistError()
 
-        self.add_user(chat_id, user_details.UNKNOWN)
-
-        return user_details.UNKNOWN
+        return user.data()
 
     def add_user(self, chat_id, phone_number):
         self.bot.send_message(chat_id, "שנייה סורק אותך...")
-        self._user_dict[chat_id] = user_details.User(phone_number)
+        db.DBUser(chat_id, phone=phone_number, create=True)
 
     def run(self):
-        self.bot.enable_save_next_step_handlers(delay=2)
+        self.bot.enable_save_next_step_handlers(
+            delay=self.SAVE_NEXT_STEP_DELAY)
         self.bot.load_next_step_handlers()
         self.bot.polling()

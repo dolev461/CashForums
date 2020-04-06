@@ -1,9 +1,9 @@
-import bot_manager
-import user_details
 from telebot.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
+import logging
+import bot_manager
 
-bot_manager = bot_manager.BotManager()
-bot = bot_manager.bot
+manager = bot_manager.BotManager()
+bot = manager.bot
 
 # Handle '/start' and '/help'
 @bot.message_handler(commands=['help', 'start'])
@@ -13,7 +13,7 @@ def send_welcome(message):
         KeyboardButton(
             'אני צריך את המספר שלך לצורכי אימות',
             request_contact=True))
-    bot.send_message(message.chat.id, bot_manager.WELCOME_MSG,
+    bot.send_message(message.chat.id, manager.WELCOME_MSG,
                      reply_markup=markup)
     bot.register_next_step_handler(message, process_phone_number)
 
@@ -29,37 +29,15 @@ def process_phone_number(message):
             bot.register_next_step_handler(message, process_phone_number)
             return
 
-        bot_manager.add_user(chat_id, message.contact.phone_number)
+        manager.add_user(chat_id, message.contact.phone_number)
         end_session(message, chat_id)
-    except Exception as e:
-        bot.reply_to(message, "אוי לא " + str(e))
-
-
-def process_sex(message):
-    try:
-        chat_id = message.chat.id
-        sex = message.text
-        user = bot_manager.get_user(chat_id)
-        if user.name == user_details.UNKNOWN:
-            print("New user detected, who hasn't used '/start' yet")
-
-        user.sex = sex
-        if sex == user_details.MALE:
-            bot.send_message(chat_id, "יא גבר, שמח לראות אותך!")
-        elif sex == user_details.FEMALE:
-            bot.send_message(chat_id, "שלום לך גברת " + user.name)
-        else:
-            raise Exception("זאת לא אפשרות. אני הבוט אל תיקח לי את העבודה.")
-
-        end_session(message, chat_id)
-
     except Exception as e:
         bot.reply_to(message, "אוי לא " + str(e))
 
 
 def end_session(message, chat_id):
     try:
-        user = bot_manager.get_user(chat_id)
+        user = manager.get_user(chat_id)
         markup = ReplyKeyboardRemove(selective=False)
         bot.send_message(
             chat_id,
@@ -71,7 +49,7 @@ def end_session(message, chat_id):
 
 
 def main():
-    bot_manager.run()
+    manager.run()
 
 
 if __name__ == "__main__":
