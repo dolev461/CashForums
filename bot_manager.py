@@ -23,6 +23,15 @@ class BotManager(object):
     def __init__(self):
         self.bot = telebot.TeleBot(config.config['API_TOKEN'])
         self._user_dict = {}
+        self._commands = {
+            "/start": "Help",
+            "/help": "Help",
+            "/info": "Help"
+        }
+        self._admin_commands = {
+            "/add": "Help",
+            "/del": "Help"
+        }
 
     # Error handling if user isn't known yet
     # Had to use the /start command and are therefore known to the bot
@@ -37,6 +46,19 @@ class BotManager(object):
             db.DBUser(chat_id, phone=phone_number, create=True)
         except db.UserNotExistError:
             raise UserNotInvited()
+
+    def get_help(self, chat_id):
+        commands = self._commands
+
+        try:
+            user = self.get_user(chat_id)
+            print("Users: {}".format(user.groups()))
+        except UserNotExistError:
+            pass
+
+        return "\n".join(
+            ["{}: {}".format(cmd, desc)
+             for cmd, desc in commands.items()])
 
     def run(self):
         self.bot.enable_save_next_step_handlers(

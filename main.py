@@ -6,8 +6,15 @@ import bot_manager
 manager = bot_manager.BotManager()
 bot = manager.bot
 
-# Handle '/start' and '/help'
-@bot.message_handler(commands=['help', 'start'])
+# Handle '/help'
+@bot.message_handler(commands=['help'])
+def send_help(message):
+    chat_id = message.chat.id
+    bot.send_message(chat_id, manager.get_help(chat_id))
+
+
+# Handle '/start'
+@bot.message_handler(commands=['start'])
 def send_welcome(message):
     chat_id = message.chat.id
     bot.send_message(chat_id, manager.WELCOME_MSG)
