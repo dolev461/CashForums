@@ -87,6 +87,9 @@ class DBUser(object):
                 'id': self._id,
             }})
 
+    def delete(self):
+        fdb.users.delete_one(self._selector)
+
     def exists(self):
         user = fdb.users.find_one(self._selector)
         if user:
@@ -98,6 +101,11 @@ class DBUser(object):
         if not user:
             raise UserNotExistError()
         return user
+    
+    def groups(self):
+        phone = self.data()['phone']
+        results = fdb.groups.find({'users': {'$all': [phone]}})
+        return [x for x in results]
 
 
 class Group(object):
