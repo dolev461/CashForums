@@ -24,6 +24,16 @@ class BotManager(object):
         self.bot = telebot.TeleBot(config.config['API_TOKEN'])
         self._user_dict = {}
 
+    @staticmethod
+    def format_il_phone_number(phone):
+        if phone.startswith('+972'):
+            return phone
+        if phone.startswith('972'):
+            return '+{}'.format(phone)
+        if phone.startswith('0'):
+            return '+972{}'.format(phone.lstrip('0'))
+        return '+972{}'.format(phone)
+
     # Error handling if user isn't known yet
     # Had to use the /start command and are therefore known to the bot
     def get_user(self, chat_id):
@@ -34,7 +44,7 @@ class BotManager(object):
 
     def add_user(self, chat_id, phone_number):
         try:
-            db.DBUser(chat_id, phone=phone_number, create=True)
+            db.DBUser(chat_id, phone=BotManager.format_il_phone_number(phone_number), create=True)
         except db.UserNotExistError:
             raise UserNotInvited()
 
