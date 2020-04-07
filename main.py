@@ -70,7 +70,7 @@ def end_subscription(message, chat_id):
 # Helper Functions #
 ####################
 
-def ask_for_contact(chat_id, text):
+def ask_for_group(chat_id, text):
     admin_groups = manager.get_admin_groups(chat_id)
     if not admin_groups:
         return
@@ -85,6 +85,24 @@ def ask_for_contact(chat_id, text):
         chat_id,
         text,
         reply_markup=markup)
+
+
+def process_group_choice(message, success_text):
+    chat_id = message.chat.id
+    markup = ReplyKeyboardRemove(selective=False)
+    if not manager.is_group_admin(chat_id, message.text):
+        bot.send_message(
+            chat_id,
+            "את/ה לא המנהל/ת של הקבוצה!",
+            reply_markup=markup)
+        return False
+
+    bot.send_message(
+        chat_id,
+        success_text,
+        reply_markup=markup)
+
+    return True
 
 
 ############
@@ -133,30 +151,16 @@ def send_info(message):
 @bot.message_handler(commands=['add'])
 def start_add_member(message):
     chat_id = message.chat.id
-
-    ask_for_contact(chat_id, "לאיפה להוסיף את הבחור/ה החדש/ה?")
-
-    bot.register_next_step_handler(message, process_group_choice)
+    ask_for_group(chat_id, "לאיפה להוסיף את הבחור/ה החדש/ה?")
+    bot.register_next_step_handler(message, process_add_group_choice)
 
 
-def process_group_choice(message):
-    chat_id = message.chat.id
-    admin_groups = manager.get_admin_groups(chat_id)
-
-    markup = ReplyKeyboardRemove(selective=False)
-    if message.text not in admin_groups:
-        bot.send_message(
-            chat_id,
-            "את/ה לא המנהל/ת של הקבוצה!",
-            reply_markup=markup)
-        return
-
-    manager.pending_user["group"] = message.text
-    bot.send_message(
-        chat_id,
-        "מה השם של הבחור/ה החדש/ה?\nניתן לשתף איש קשר ;)",
-        reply_markup=markup)
-    bot.register_next_step_handler(message, process_member_name)
+def process_add_group_choice(message):
+    if process_group_choice(
+            message,
+            "מה השם של הבחור/ה החדש/ה?\nניתן לשתף איש קשר ;)"):
+        manager.pending_user["group"] = message.text
+        bot.register_next_step_handler(message, process_member_name)
 
 
 def process_member_name(message):
@@ -193,7 +197,7 @@ def end_add_member(chat_id):
             manager.pending_user["phone"],
             manager.pending_user["name"])
     except bot_manager.UserAlreadyExistsError:
-        bot.send_message(chat_id, "המספר טלפון כבר קיים במערכת")
+        pass
 
     try:
         manager.add_member(
@@ -201,13 +205,45 @@ def end_add_member(chat_id):
             manager.pending_user["phone"])
     except bot_manager.UserAlreadyInGroupError:
         bot.send_message(chat_id, "המספר טלפון כבר קיים בקבוצה")
+    else:
+        bot.send_message(chat_id, "תודה!")
 
-    bot.send_message(chat_id, "תודה!")
-    manager.pending_user = {
-        "name": None,
-        "phone": None,
-        "group": None
-    }
+    manager.clear_pending_user()
+
+
+# Handle '/rm'
+@bot.message_handler(commands=['rm'])
+def remove_member(message):
+    chat_id = message.chat.id
+    ask_for_group(chat_id, "מאיזו קבוצה מתבצעת ההדחה? 😔")
+    bot.register_next_step_handler(message, process_remove_group_choice)
+
+
+def process_remove_group_choice(message):
+    if process_group_choice(
+            message,
+            "מה המספר של המודח/ת?\nניתן לשתף איש קשר ;)"):
+        manager.pending_user["group"] = message.text
+        bot.register_next_step_handler(message, process_remove_member_phone)
+
+
+def process_remove_member_phone(message):
+    chat_id = message.chat.id
+    phone = ""
+    if message.contact is not None:
+        phone = message.contact.phone_number
+    else:
+        phone = message.text
+
+    try:
+        manager.remove_member(manager.pending_user["group"], phone)
+    except bot_manager.UserNotInGroupError:
+        bot.send_message(chat_id, "המספר טלפון לא נמצא בקבוצה בכלל... מה?")
+    else:
+        bot.send_message(chat_id, "ההדחה הושלמה.")
+
+    manager.clear_pending_user()
+
 
 # Handle '/groupadd'
 @bot.message_handler(commands=['groupadd'])
@@ -226,6 +262,7 @@ def start_group_create(message):
     )
     bot.register_next_step_handler(message, process_group_create)
 
+
 def process_group_create(message):
     chat_id = message.chat.id
 
@@ -242,11 +279,13 @@ def process_group_create(message):
     )
     bot.register_next_step_handler(message, process_group_create_admin)
 
+
 def process_group_create_admin(message):
     chat_id = message.chat.id
     gname = manager.pending_group['name']
     if message.contact is not None:
-        phone = bot_manager.BotManager.format_il_phone_number(message.contact.phone_number)
+        phone = bot_manager.BotManager.format_il_phone_number(
+            message.contact.phone_number)
     else:
         phone = bot_manager.BotManager.format_il_phone_number(message.text)
 
@@ -261,7 +300,8 @@ def process_group_create_admin(message):
     except bot_manager.UserNotExistError:
         bot.reply_to(
             message,
-            "יצירת הקבוצה נכשלה, לא הצלחתי למצוא את המספר {} במערכת.".format(phone)
+            "יצירת הקבוצה נכשלה, לא הצלחתי למצוא את המספר {} במערכת.".format(
+                phone)
         )
     except bot_manager.GroupAlreadyExists:
         bot.send_message(
@@ -286,6 +326,7 @@ def start_group_delete(message):
     )
     bot.register_next_step_handler(message, process_group_delete)
 
+
 def process_group_delete(message):
     chat_id = message.chat.id
     name = message.text
@@ -302,12 +343,6 @@ def process_group_delete(message):
             message,
             "אין קבוצה כזאת 🤦‍♀️, המחיקה נכשלה."
         )
-
-
-# Handle '/rm'
-@bot.message_handler(commands=['rm'])
-def remove_member(message):
-    pass
 
 
 def main():

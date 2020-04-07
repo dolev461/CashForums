@@ -22,8 +22,10 @@ class UserNotExistError(Exception):
 class UserNotInvited(Exception):
     pass
 
+
 class GroupAlreadyExists(Exception):
     pass
+
 
 class GroupNotExistError(Exception):
     pass
@@ -69,6 +71,13 @@ class BotManager(object):
         if phone.startswith('0'):
             return '+972{}'.format(phone.lstrip('0'))
         return '+972{}'.format(phone)
+
+    def clear_pending_user(self):
+        self.pending_user = {
+            "name": None,
+            "phone": None,
+            "group": None
+        }
 
     # Error handling if user isn't known yet
     # Had to use the /start command and are therefore known to the bot
@@ -129,7 +138,8 @@ class BotManager(object):
     def remove_member(self, group_name, phone):
         group = db.Group(group_name)
         try:
-            group.remove_user_by_phone(phone)
+            group.remove_user_by_phone(
+                BotManager.format_il_phone_number(phone))
         except db.UserNotInGroupError:
             raise UserNotInGroupError()
 
@@ -146,6 +156,9 @@ class BotManager(object):
                 admin_groups.append(group['name'])
 
         return admin_groups
+
+    def is_group_admin(self, chat_id, group_name):
+        return group_name in self.get_admin_groups(chat_id)
 
     def get_help(self, chat_id):
         commands = self._commands.copy()
@@ -170,11 +183,10 @@ class BotManager(object):
         groups = user.groups()
 
         balances = {}
-        for group_dict in groups:
-            g_name = group_dict['name']
-            group = db.Group(g_name)
+        for group_name in groups:
+            group = db.Group(group_name)
             balance = group.get_user_balance(chat_id)
-            balances[g_name] = -balance
+            balances[group_name] = -balance
 
         return balances
 
