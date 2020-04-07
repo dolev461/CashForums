@@ -217,7 +217,7 @@ def start_group_create(message):
     if not user.data()['admin']:
         bot.reply_to(
             message,
-            "זה רק לאדמינים הפיצ'ר הזה :/")
+            "זה רק לאדמינים הפיצ'ר הזה 😑")
         return
 
     bot.reply_to(
@@ -277,7 +277,7 @@ def start_group_delete(message):
     if not user.data()['admin']:
         bot.reply_to(
             message,
-            "זה רק לאדמינים הפיצ'ר הזה :/")
+            "זה רק לאדמינים הפיצ'ר הזה 😑")
         return
 
     bot.reply_to(
