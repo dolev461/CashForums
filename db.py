@@ -202,3 +202,7 @@ class Group(object):
 
     def get_user_balance(self, id):
         return sum([b['amount'] for b in self.get_user_bill_history(id)])
+
+    def delete(self):
+        fdb.groups.delete_one(self._selector)
+        fdb.bills.delete_many({'group': self._name})

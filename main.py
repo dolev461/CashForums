@@ -268,6 +268,42 @@ def process_group_create_admin(message):
             chat_id,
             "הקבוצה {} כבר קיימת 🤦‍♀️".format(gname)
         )
+
+# Handle '/grouprm'
+@bot.message_handler(commands=['grouprm'])
+def start_group_delete(message):
+    chat_id = message.chat.id
+    user = manager.get_user(chat_id)
+    if not user.data()['admin']:
+        bot.reply_to(
+            message,
+            "זה רק לאדמינים הפיצ'ר הזה :/")
+        return
+
+    bot.reply_to(
+        message,
+        "מה שם הקבוצה שצריך למחוק? 🤔"
+    )
+    bot.register_next_step_handler(message, process_group_delete)
+
+def process_group_delete(message):
+    chat_id = message.chat.id
+    name = message.text
+
+    try:
+        group = manager.get_group(name)
+        group.delete()
+        bot.send_message(
+            chat_id,
+            "הקבוצה נמחקה."
+        )
+    except bot_manager.GroupNotExistError:
+        bot.reply_to(
+            message,
+            "אין קבוצה כזאת 🤦‍♀️, המחיקה נכשלה."
+        )
+
+
 # Handle '/rm'
 @bot.message_handler(commands=['rm'])
 def remove_member(message):

@@ -25,6 +25,9 @@ class UserNotInvited(Exception):
 class GroupAlreadyExists(Exception):
     pass
 
+class GroupNotExistError(Exception):
+    pass
+
 
 class BotManager(object):
     SAVE_NEXT_STEP_DELAY = 2  # Seconds
@@ -74,6 +77,12 @@ class BotManager(object):
             return db.DBUser(chat_id)
         except db.UserNotExistError:
             raise UserNotExistError()
+
+    def get_group(self, name):
+        try:
+            return db.Group(name)
+        except db.GroupNotExistError:
+            raise GroupNotExistError()
 
     def get_user_from_phone(self, phone):
         try:
