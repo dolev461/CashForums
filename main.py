@@ -2,14 +2,15 @@ from telebot.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemo
 import logging
 import bot_manager
 
+
+WELCOME_MSG = ("שלום, אני בוט.\n"
+               "אני אעזור לך להתמודד עם הלחץ הנפשי של הפורומים.\n\n"
+               "שנייה סורק אותך...")
+
+
 manager = bot_manager.BotManager()
 bot = manager.bot
 
-# Handle '/help'
-@bot.message_handler(commands=['help'])
-def send_help(message):
-    chat_id = message.chat.id
-    bot.send_message(chat_id, manager.get_help(chat_id))
 
 ################
 # Subscription #
@@ -19,7 +20,7 @@ def send_help(message):
 @bot.message_handler(commands=['start'])
 def start_subscription(message):
     chat_id = message.chat.id
-    bot.send_message(chat_id, manager.WELCOME_MSG)
+    bot.send_message(chat_id, WELCOME_MSG)
 
     try:
         manager.get_user(chat_id)
@@ -65,9 +66,36 @@ def end_subscription(message, chat_id):
         reply_markup=markup)
 
 
+####################
+# Helper Functions #
+####################
+
+def ask_for_contact(chat_id, text):
+    admin_groups = manager.get_admin_groups(chat_id)
+    if not admin_groups:
+        return
+
+    markup = ReplyKeyboardMarkup(row_width=1)
+    buttons = []
+    for group in admin_groups:
+        buttons.append(KeyboardButton(group))
+
+    markup.add(*buttons)
+    bot.send_message(
+        chat_id,
+        text,
+        reply_markup=markup)
+
+
 ############
 # Commands #
 ############
+
+# Handle '/help'
+@bot.message_handler(commands=['help'])
+def send_help(message):
+    chat_id = message.chat.id
+    bot.send_message(chat_id, manager.get_help(chat_id))
 
 # Handle '/info'
 @bot.message_handler(commands=['info'])
@@ -103,22 +131,10 @@ def send_info(message):
 
 # Handle '/add'
 @bot.message_handler(commands=['add'])
-def start_add_group_user(message):
+def start_add_member(message):
     chat_id = message.chat.id
-    admin_groups = manager.get_admin_groups(chat_id)
-    if not admin_groups:
-        return
 
-    markup = ReplyKeyboardMarkup(row_width=1)
-    buttons = []
-    for group in admin_groups:
-        buttons.append(KeyboardButton(group))
-
-    markup.add(*buttons)
-    bot.send_message(
-        chat_id,
-        "לאיפה להוסיף את הבחור/ה החדש/ה?",
-        reply_markup=markup)
+    ask_for_contact(chat_id, "לאיפה להוסיף את הבחור/ה החדש/ה?")
 
     bot.register_next_step_handler(message, process_group_choice)
 
@@ -153,7 +169,7 @@ def process_member_name(message):
             name.append(str(message.contact.last_name))
         manager.pending_user["name"] = " ".join(name)
         manager.pending_user["phone"] = message.contact.phone_number
-        end_add_group_user(chat_id)
+        end_add_member(chat_id)
     else:
         manager.pending_user["name"] = message.text
         bot.send_message(chat_id, "אפשר את המספר שלו/שלה? ;)")
@@ -163,10 +179,10 @@ def process_member_name(message):
 def process_member_phone(message):
     chat_id = message.chat.id
     manager.pending_user["phone"] = message.text
-    end_add_group_user(chat_id)
+    end_add_member(chat_id)
 
 
-def end_add_group_user(chat_id):
+def end_add_member(chat_id):
     if (manager.pending_user["name"] is None or
             manager.pending_user["phone"] is None or
             manager.pending_user["group"] is None):
@@ -192,6 +208,11 @@ def end_add_group_user(chat_id):
         "phone": None,
         "group": None
     }
+
+# Handle '/rm'
+@bot.message_handler(commands=['rm'])
+def remove_member(message):
+    pass
 
 
 def main():
