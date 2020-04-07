@@ -54,7 +54,8 @@ class BotManager(object):
         self._group_admin_commands = {
             "/add": "Group admin command to add members",
             "/rm": "Group admin command to remove members",
-            "/members": "Group admin command to display all group members"
+            "/members": "Group admin command to display all group members",
+            "/groupinfo": "Group admin command to see all members info"
         }
         self._admin_commands = {
             "/groupadd": "Admin command to create a new group",
@@ -187,6 +188,25 @@ class BotManager(object):
             group = db.Group(group_name)
             balance = group.get_user_balance(chat_id)
             balances[group_name] = -balance
+
+        return balances
+
+    def get_all_users_balances(self, group_name):
+        try:
+            group = db.Group(group_name)
+        except db.GroupNotExistError:
+            raise GroupNotExistError
+
+        balances = {}
+        for user in group.get_users():
+            data = user.data()
+            name = data["name"]
+            balance = 0
+            if "id" in data:
+                user_id = data["id"]
+                balance = -group.get_user_balance(user_id)
+
+            balances[name] = balance
 
         return balances
 

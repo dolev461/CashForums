@@ -105,9 +105,9 @@ def process_group_choice(message, success_text):
     return True
 
 
-############
-# Commands #
-############
+#################
+# User Commands #
+#################
 
 # Handle '/help'
 @bot.message_handler(commands=['help'])
@@ -146,6 +146,10 @@ def send_info(message):
     else:
         bot.send_message(chat_id, "לא מצאתי את הקבוצה שלך :(")
 
+
+########################
+# Group Admin Commands #
+########################
 
 # Handle '/add'
 @bot.message_handler(commands=['add'])
@@ -245,6 +249,36 @@ def process_remove_member_phone(message):
     manager.clear_pending_user()
 
 
+# Handle '/groupinfo'
+@bot.message_handler(commands=['groupinfo'])
+def start_group_info(message):
+    chat_id = message.chat.id
+    groups = manager.get_admin_groups(chat_id)
+    if len(groups) == 1:
+        send_group_info(chat_id, groups.pop())
+    else:
+        ask_for_group(chat_id, "מה הקבוצה שאנחנו מחפשים?")
+        bot.register_next_step_handler(message, process_add_group_choice)
+
+
+def process_group_info(message):
+    if process_group_choice(
+            message,
+            "נמצאה הקבוצה!"):
+        send_group_info(message.chat.id, message.text)
+
+
+def send_group_info(chat_id, group):
+    # TODO sort
+    balances = manager.get_all_users_balances(group)
+    msg = "\n".join(["{}: {}".format(name, amount)
+                     for name, amount in balances.items()])
+
+    bot.send_message(chat_id, msg)
+
+##################
+# Admin Commands #
+##################
 # Handle '/groupadd'
 @bot.message_handler(commands=['groupadd'])
 def start_group_create(message):
