@@ -109,7 +109,7 @@ class DBUser(object):
         if not user:
             raise UserNotExistError()
         return user
-    
+
     def groups(self):
         phone = self.data()['phone']
         results = fdb.groups.find({'users': {'$all': [phone]}}, {'name': 1})
@@ -169,9 +169,13 @@ class Group(object):
     def remove_user(self, id):
         user = DBUser(id)
         phone = user.data()['phone']
+        self.remove_user_by_phone(phone)
 
-        if self.has_user(phone):
-            fdb.groups.update(self._selector, {'$pull': {'users': phone}})
+    def remove_user_by_phone(self, phone):
+        if not self.has_user(phone):
+            raise UserNotInGroupError()
+
+        fdb.groups.update(self._selector, {'$pull': {'users': phone}})
 
     def has_user(self, phone):
         return phone in self.data()['users']

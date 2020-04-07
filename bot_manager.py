@@ -11,6 +11,10 @@ class UserAlreadyInGroupError(Exception):
     pass
 
 
+class UserNotInGroupError(Exception):
+    pass
+
+
 class UserNotExistError(Exception):
     pass
 
@@ -24,12 +28,6 @@ class GroupAlreadyExists(Exception):
 
 class BotManager(object):
     SAVE_NEXT_STEP_DELAY = 2  # Seconds
-    WELCOME_MSG = ("שלום, אני בוט.\n"
-                   "אני אעזור לך להתמודד עם הלחץ הנפשי של הפורומים.\n\n"
-                   "שנייה סורק אותך...")
-    PLUS_MSG = "כל הכבוד! יש לך עודף של {}"
-    MINUS_MSG = "קודם כל.. בלי פאניקה! החוב שלך הוא {}"
-    NEUTRAL_MSG = "הכל טוב והמאזן מושלם"
 
     def __init__(self):
         self.bot = telebot.TeleBot(config.config['API_TOKEN'])
@@ -119,10 +117,18 @@ class BotManager(object):
         except db.UserAlreadyInGroupError:
             raise UserAlreadyExistsError()
 
+    def remove_member(self, group_name, phone):
+        group = db.Group(group_name)
+        try:
+            group.remove_user_by_phone(phone)
+        except db.UserNotInGroupError:
+            raise UserNotInGroupError()
+
     def get_admin_groups(self, chat_id):
         user = self.get_user(chat_id)
         admin_groups = []
-        for group in user.groups():
+        for group_name in user.groups():
+            group = db.Group(group_name).data()
             user_phone = BotManager.format_il_phone_number(
                 user.data()['phone'])
             group_admin_phone = BotManager.format_il_phone_number(
