@@ -73,6 +73,9 @@ def end_subscription(message, chat_id):
 @bot.message_handler(commands=['info'])
 def send_info(message):
     chat_id = message.chat.id
+    if not manager.is_user_exists(chat_id):
+        return
+
     balances = manager.get_user_balances(chat_id)
     balances_str_list = []
     for group, balance in balances.items():
@@ -88,11 +91,14 @@ def send_info(message):
         else:
             balances_str_list.append(
                 "קבוצה: {}\n"
-                "המאזן שלך מושלם!".format(group)
+                "אין לך חוב בקופה. מדהים :)".format(group)
             )
 
     balances_str = "\n\n".join(balances_str_list)
-    bot.send_message(chat_id, balances_str)
+    if balances_str:
+        bot.send_message(chat_id, balances_str)
+    else:
+        bot.send_message(chat_id, "לא מצאתי את הקבוצה שלך :(")
 
 
 # Handle '/add'
@@ -106,7 +112,7 @@ def start_add_group_user(message):
     markup = ReplyKeyboardMarkup(row_width=1)
     buttons = []
     for group in admin_groups:
-        buttons.append(KeyboardButton(group.data()['name']))
+        buttons.append(KeyboardButton(group))
 
     markup.add(*buttons)
     bot.send_message(
@@ -119,17 +125,17 @@ def start_add_group_user(message):
 
 def process_group_choice(message):
     chat_id = message.chat.id
-    admin_groups_names = [group.data()['name']
-                          for group in manager.get_admin_groups(chat_id)]
+    admin_groups = manager.get_admin_groups(chat_id)
 
     markup = ReplyKeyboardRemove(selective=False)
-    if message.text not in admin_groups_names:
+    if message.text not in admin_groups:
         bot.send_message(
             chat_id,
             "את/ה לא המנהל/ת של הקבוצה!",
             reply_markup=markup)
         return
 
+    manager.pending_user["group"] = message.text
     bot.send_message(
         chat_id,
         "מה השם של הבחור/ה החדש/ה?\nניתן לשתף איש קשר ;)",
@@ -140,8 +146,12 @@ def process_group_choice(message):
 def process_member_name(message):
     chat_id = message.chat.id
     if message.contact is not None:
-        manager.pending_user["name"] = "{} {}".format(str(message.contact.first_name),
-                                                      str(message.contact.last_name)).strip()
+        name = []
+        if message.contact.first_name is not None:
+            name.append(str(message.contact.first_name))
+        if message.contact.last_name is not None:
+            name.append(str(message.contact.last_name))
+        manager.pending_user["name"] = " ".join(name)
         manager.pending_user["phone"] = message.contact.phone_number
         end_add_group_user(chat_id)
     else:
@@ -158,18 +168,30 @@ def process_member_phone(message):
 
 def end_add_group_user(chat_id):
     if (manager.pending_user["name"] is None or
-            manager.pending_user["phone"] is None):
+            manager.pending_user["phone"] is None or
+            manager.pending_user["group"] is None):
         return
 
     try:
-        manager.add_user(
-            chat_id,
+        manager.add_user_by_phone(
             manager.pending_user["phone"],
             manager.pending_user["name"])
     except bot_manager.UserAlreadyExistsError:
         bot.send_message(chat_id, "המספר טלפון כבר קיים במערכת")
 
+    try:
+        manager.add_member(
+            manager.pending_user["group"],
+            manager.pending_user["phone"])
+    except bot_manager.UserAlreadyInGroupError:
+        bot.send_message(chat_id, "המספר טלפון כבר קיים בקבוצה")
+
     bot.send_message(chat_id, "תודה!")
+    manager.pending_user = {
+        "name": None,
+        "phone": None,
+        "group": None
+    }
 
 
 def main():

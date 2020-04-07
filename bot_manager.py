@@ -7,6 +7,10 @@ class UserAlreadyExistsError(Exception):
     pass
 
 
+class UserAlreadyInGroupError(Exception):
+    pass
+
+
 class UserNotExistError(Exception):
     pass
 
@@ -29,7 +33,8 @@ class BotManager(object):
         # Save user details before adding it for external use
         self.pending_user = {
             "name": None,
-            "phone": None
+            "phone": None,
+            "group": None
         }
         self._commands = {
             "/start": "Register your telegram account to the bot",
@@ -65,20 +70,35 @@ class BotManager(object):
         except db.UserNotExistError:
             raise UserNotExistError()
 
-    def add_user(self, chat_id, phone_number, name=None):
-        if name is not None:
-            try:
-                db.DBUser.create_pending_user(phone_number, name)
-            except db.UserAlreadyExistsError:
-                raise UserAlreadyExistsError()
-        else:
-            try:
-                db.DBUser(
-                    chat_id,
-                    phone=BotManager.format_il_phone_number(phone_number),
-                    create=True)
-            except db.UserNotExistError:
-                raise UserNotInvited()
+    def is_user_exists(self, chat_id):
+        try:
+            self.get_user(chat_id)
+        except UserNotExistError:
+            return False
+
+        return True
+
+    def add_user(self, chat_id, phone_number):
+        try:
+            db.DBUser(
+                chat_id,
+                phone=BotManager.format_il_phone_number(phone_number),
+                create=True)
+        except db.UserNotExistError:
+            raise UserNotInvited()
+
+    def add_user_by_phone(self, phone_number, name):
+        try:
+            db.DBUser.create_pending_user(phone_number, name)
+        except db.UserAlreadyExistsError:
+            raise UserAlreadyExistsError()
+
+    def add_member(self, group_name, phone):
+        group = db.Group(group_name)
+        try:
+            group.add_user_by_phone(phone)
+        except db.UserAlreadyInGroupError:
+            raise UserAlreadyExistsError()
 
     def get_admin_groups(self, chat_id):
         user = self.get_user(chat_id)
@@ -89,12 +109,12 @@ class BotManager(object):
             group_admin_phone = BotManager.format_il_phone_number(
                 group['admin'])
             if user_phone == group_admin_phone:
-                admin_groups.append(db.Group(group['name']))
+                admin_groups.append(group['name'])
 
         return admin_groups
 
     def get_help(self, chat_id):
-        commands = self._commands
+        commands = self._commands.copy()
 
         try:
             user = self.get_user(chat_id)
