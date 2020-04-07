@@ -90,6 +90,10 @@ class DBUser(object):
         }})
 
     def delete(self):
+        for group_name in self.groups():
+            group = Group(group_name)
+            group.remove_user(self._id)
+        fdb.bills.delete_many({'user': self._id})
         fdb.users.delete_one(self._selector)
 
     def exists(self):
@@ -106,8 +110,8 @@ class DBUser(object):
     
     def groups(self):
         phone = self.data()['phone']
-        results = fdb.groups.find({'users': {'$all': [phone]}})
-        return [x for x in results]
+        results = fdb.groups.find({'users': {'$all': [phone]}}, {'name': 1})
+        return [x['name'] for x in results]
 
 
 class Group(object):
