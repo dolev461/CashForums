@@ -193,6 +193,65 @@ def end_add_group_user(chat_id):
         "group": None
     }
 
+# Handle '/groupadd'
+@bot.message_handler(commands=['groupadd'])
+def start_group_create(message):
+    chat_id = message.chat.id
+    user = manager.get_user(chat_id)
+    if not user.data()['admin']:
+        bot.reply_to(
+            message,
+            "זה רק לאדמינים הפיצ'ר הזה :/")
+        return
+
+    bot.reply_to(
+        message,
+        "איך לקרוא לקבוצה?"
+    )
+    bot.register_next_step_handler(message, process_group_create)
+
+def process_group_create(message):
+    chat_id = message.chat.id
+
+    name = message.text
+
+    bot.reply_to(
+        message,
+        "סבבה, אני אקרא לקבוצה '{}'".format(name))
+    manager.pending_group['name'] = name
+
+    bot.send_message(
+        chat_id,
+        "מה מספר הפלאפון של מנהל הקבוצה? (ניתן לשתף איש קשר)"
+    )
+    bot.register_next_step_handler(message, process_group_create_admin)
+
+def process_group_create_admin(message):
+    chat_id = message.chat.id
+    gname = manager.pending_group['name']
+    if message.contact is not None:
+        phone = bot_manager.BotManager.format_il_phone_number(message.contact.phone_number)
+    else:
+        phone = bot_manager.BotManager.format_il_phone_number(message.text)
+
+    try:
+        user = manager.get_user_from_phone(phone)
+        manager.create_group(gname, phone)
+        manager.add_member(gname, phone)
+        bot.send_message(
+            chat_id,
+            "יצרתי את הקבוצה '{}'😉".format(gname)
+        )
+    except bot_manager.UserNotExistError:
+        bot.reply_to(
+            message,
+            "יצירת הקבוצה נכשלה, לא הצלחתי למצוא את המספר {} במערכת.".format(phone)
+        )
+    except bot_manager.GroupAlreadyExists:
+        bot.send_message(
+            chat_id,
+            "הקבוצה {} כבר קיימת 🤦‍♀️".format(gname)
+        )
 
 def main():
     manager.run()

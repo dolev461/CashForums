@@ -18,6 +18,9 @@ class UserNotExistError(Exception):
 class UserNotInvited(Exception):
     pass
 
+class GroupAlreadyExists(Exception):
+    pass
+
 
 class BotManager(object):
     SAVE_NEXT_STEP_DELAY = 2  # Seconds
@@ -35,6 +38,10 @@ class BotManager(object):
             "name": None,
             "phone": None,
             "group": None
+        }
+        self.pending_group = {
+            "name": None,
+            "admin": None,
         }
         self._commands = {
             "/start": "Register your telegram account to the bot",
@@ -70,6 +77,12 @@ class BotManager(object):
         except db.UserNotExistError:
             raise UserNotExistError()
 
+    def get_user_from_phone(self, phone):
+        try:
+            return db.DBUser.from_phone(phone)
+        except db.UserNotExistError:
+            raise UserNotExistError()
+
     def is_user_exists(self, chat_id):
         try:
             self.get_user(chat_id)
@@ -77,6 +90,12 @@ class BotManager(object):
             return False
 
         return True
+
+    def create_group(self, name, admin):
+        try:
+            g = db.Group(name, create=True, admin=admin)
+        except db.GroupAlreadyExistsError:
+            raise GroupAlreadyExists()
 
     def add_user(self, chat_id, phone_number):
         try:

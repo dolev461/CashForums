@@ -63,7 +63,9 @@ class DBUser(object):
     @staticmethod
     def from_phone(phone):
         user = fdb.users.find_one({'phone': phone})
-        return user
+        if not user:
+            raise UserNotExistError()
+        return DBUser(user['id'])
 
     def __init__(self, id, create=False, phone=None):
         self._id = id
