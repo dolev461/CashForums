@@ -1,4 +1,4 @@
-from telebot.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telebot.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 import logging
 import bot_manager
 
@@ -6,6 +6,8 @@ import bot_manager
 WELCOME_MSG = ("שלום, אני בוט.\n"
                "אני אעזור לך להתמודד עם הלחץ הנפשי של הפורומים.\n\n"
                "שנייה סורק אותך...")
+ADD_PREFIX = "add_"
+REMOVE_PREFIX = "remove_"
 
 
 manager = bot_manager.BotManager()
@@ -69,16 +71,27 @@ def end_subscription(message, chat_id):
 ####################
 # Helper Functions #
 ####################
+def is_any_group_admin(chat_id):
+    if not manager.get_admin_groups(chat_id):
+        bot.send_message(
+            chat_id,
+            "רק אחראי\ת פורומים יכול\ה לשאת באחריות כזאת כבדה 🏋️‍♀️")
+        return False
 
-def ask_for_group(chat_id, text):
+    return True
+
+
+def ask_for_group(chat_id, text, callback_prefix=""):
     admin_groups = manager.get_admin_groups(chat_id)
     if not admin_groups:
         return
 
-    markup = ReplyKeyboardMarkup(row_width=1)
+    markup = InlineKeyboardMarkup(row_width=2)
     buttons = []
     for group in admin_groups:
-        buttons.append(KeyboardButton(group))
+        buttons.append(InlineKeyboardButton(
+            group,
+            callback_data="{}{}".format(callback_prefix, group)))
 
     markup.add(*buttons)
     bot.send_message(
@@ -87,10 +100,9 @@ def ask_for_group(chat_id, text):
         reply_markup=markup)
 
 
-def process_group_choice(message, success_text):
-    chat_id = message.chat.id
+def process_group_choice(chat_id, group, success_text):
     markup = ReplyKeyboardRemove(selective=False)
-    if not manager.is_group_admin(chat_id, message.text):
+    if not manager.is_group_admin(chat_id, group):
         bot.send_message(
             chat_id,
             "את/ה לא המנהל/ת של הקבוצה!",
@@ -108,12 +120,12 @@ def process_group_choice(message, success_text):
 #################
 # User Commands #
 #################
-
 # Handle '/help'
 @bot.message_handler(commands=['help'])
 def send_help(message):
     chat_id = message.chat.id
     bot.send_message(chat_id, manager.get_help(chat_id))
+
 
 # Handle '/info'
 @bot.message_handler(commands=['info'])
@@ -150,21 +162,26 @@ def send_info(message):
 ########################
 # Group Admin Commands #
 ########################
-
 # Handle '/add'
-@bot.message_handler(commands=['add'])
+@bot.message_handler(commands=["add"])
 def start_add_member(message):
     chat_id = message.chat.id
-    ask_for_group(chat_id, "לאיפה להוסיף את הבחור/ה החדש/ה?")
-    bot.register_next_step_handler(message, process_add_group_choice)
+    if not is_any_group_admin(chat_id):
+        return
+
+    ask_for_group(chat_id, "לאיפה להוסיף את הבחור/ה החדש/ה?", ADD_PREFIX)
 
 
-def process_add_group_choice(message):
+@bot.callback_query_handler(func=lambda query: query.data.startswith(ADD_PREFIX))
+def process_add_group_choice(call):
+    chat_id = call.message.chat.id
+    group = call.data.replace(ADD_PREFIX, "", 1)
     if process_group_choice(
-            message,
+            chat_id,
+            group,
             "מה השם של הבחור/ה החדש/ה?\nניתן לשתף איש קשר ;)"):
-        manager.pending_user["group"] = message.text
-        bot.register_next_step_handler(message, process_member_name)
+        manager.pending_user["group"] = group
+        bot.register_next_step_handler(call.message, process_member_name)
 
 
 def process_member_name(message):
@@ -219,16 +236,24 @@ def end_add_member(chat_id):
 @bot.message_handler(commands=['rm'])
 def remove_member(message):
     chat_id = message.chat.id
-    ask_for_group(chat_id, "מאיזו קבוצה מתבצעת ההדחה? 😔")
-    bot.register_next_step_handler(message, process_remove_group_choice)
+    if not is_any_group_admin(chat_id):
+        return
+
+    ask_for_group(chat_id, "מאיזו קבוצה מתבצעת ההדחה? 😔", REMOVE_PREFIX)
 
 
-def process_remove_group_choice(message):
+@bot.callback_query_handler(func=lambda query: query.data.startswith(REMOVE_PREFIX))
+def process_remove_group_choice(call):
+    chat_id = call.message.chat.id
+    group = call.data.replace(REMOVE_PREFIX, "", 1)
     if process_group_choice(
-            message,
+            chat_id,
+            group,
             "מה המספר של המודח/ת?\nניתן לשתף איש קשר ;)"):
-        manager.pending_user["group"] = message.text
-        bot.register_next_step_handler(message, process_remove_member_phone)
+        manager.pending_user["group"] = group
+        bot.register_next_step_handler(
+            call.message,
+            process_remove_member_phone)
 
 
 def process_remove_member_phone(message):
@@ -249,10 +274,21 @@ def process_remove_member_phone(message):
     manager.clear_pending_user()
 
 
+# Handle '/bill'
+@bot.message_handler(commands=['bill'])
+def start_bill(message):
+    chat_id = message.chat.id
+    if not is_any_group_admin(chat_id):
+        return
+
+
 # Handle '/groupinfo'
 @bot.message_handler(commands=['groupinfo'])
 def start_group_info(message):
     chat_id = message.chat.id
+    if not is_any_group_admin(chat_id):
+        return
+
     groups = manager.get_admin_groups(chat_id)
     if len(groups) == 1:
         send_group_info(chat_id, groups.pop())
@@ -269,12 +305,13 @@ def process_group_info(message):
 
 
 def send_group_info(chat_id, group):
-    # TODO sort
+    # TODO sort by money
     balances = manager.get_all_users_balances(group)
     msg = "\n".join(["{}: {}".format(name, amount)
                      for name, amount in balances.items()])
 
     bot.send_message(chat_id, msg)
+
 
 ##################
 # Admin Commands #
@@ -377,6 +414,16 @@ def process_group_delete(message):
             message,
             "אין קבוצה כזאת 🤦‍♀️, המחיקה נכשלה."
         )
+
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    if call.data == "cb_yes":
+        bot.answer_callback_query(call.id, "Answer is Yes")
+    elif call.data == "cb_no":
+        bot.answer_callback_query(call.id, "Answer is No")
+    else:
+        bot.answer_callback_query(call.id, "אין קבוצה כזאת")
 
 
 def main():

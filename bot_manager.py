@@ -55,23 +55,13 @@ class BotManager(object):
             "/add": "Group admin command to add members",
             "/rm": "Group admin command to remove members",
             "/members": "Group admin command to display all group members",
+            "/bill": "Group admin command to bill a user",
             "/groupinfo": "Group admin command to see all members info"
         }
         self._admin_commands = {
             "/groupadd": "Admin command to create a new group",
             "/grouprm": "Admin command to remove a group"
         }
-
-    @staticmethod
-    def format_il_phone_number(phone):
-        phone = phone.replace("-", "")
-        if phone.startswith('+972'):
-            return phone
-        if phone.startswith('972'):
-            return '+{}'.format(phone)
-        if phone.startswith('0'):
-            return '+972{}'.format(phone.lstrip('0'))
-        return '+972{}'.format(phone)
 
     def clear_pending_user(self):
         self.pending_user = {
@@ -118,7 +108,7 @@ class BotManager(object):
         try:
             db.DBUser(
                 chat_id,
-                phone=BotManager.format_il_phone_number(phone_number),
+                phone=phone_number,
                 create=True)
         except db.UserNotExistError:
             raise UserNotInvited()
@@ -139,20 +129,16 @@ class BotManager(object):
     def remove_member(self, group_name, phone):
         group = db.Group(group_name)
         try:
-            group.remove_user_by_phone(
-                BotManager.format_il_phone_number(phone))
+            group.remove_user_by_phone(phone)
         except db.UserNotInGroupError:
             raise UserNotInGroupError()
 
     def get_admin_groups(self, chat_id):
         user = self.get_user(chat_id)
         admin_groups = []
-        for group_name in user.groups():
-            group = db.Group(group_name).data()
-            user_phone = BotManager.format_il_phone_number(
-                user.data()['phone'])
-            group_admin_phone = BotManager.format_il_phone_number(
-                group['admin'])
+        for group in user.groups():
+            user_phone = user.data()['phone']
+            group_admin_phone = group['admin']
             if user_phone == group_admin_phone:
                 admin_groups.append(group['name'])
 
@@ -199,11 +185,10 @@ class BotManager(object):
 
         balances = {}
         for user in group.get_users():
-            data = user.data()
-            name = data["name"]
+            name = user["name"]
             balance = 0
-            if "id" in data:
-                user_id = data["id"]
+            if "id" in user:
+                user_id = user["id"]
                 balance = -group.get_user_balance(user_id)
 
             balances[name] = balance

@@ -50,6 +50,7 @@ class DBUser(object):
 
     @staticmethod
     def create_pending_user(phone, name):
+        phone = DBUser.format_il_phone_number(phone)
         user = fdb.users.find_one({'phone': phone})
         if (user):
             raise UserAlreadyExistsError()
@@ -62,17 +63,32 @@ class DBUser(object):
 
     @staticmethod
     def from_phone(phone):
-        user = fdb.users.find_one({'phone': phone})
+        user = fdb.users.find_one(
+            {'phone': DBUser.format_il_phone_number(phone)})
         if not user:
             raise UserNotExistError()
-        return DBUser(user['id'])
+
+        return user
+
+    @staticmethod
+    def format_il_phone_number(phone):
+        phone = phone.replace("-", "")
+        if phone.startswith('+972'):
+            return phone
+        if phone.startswith('972'):
+            return '+{}'.format(phone)
+        if phone.startswith('0'):
+            return '+972{}'.format(phone.lstrip('0'))
+        return '+972{}'.format(phone)
 
     def __init__(self, id, create=False, phone=None):
         self._id = id
         self._selector = {'id': id}
 
         if create:
-            self._initialize_pending_user(id, phone)
+            self._initialize_pending_user(
+                id,
+                DBUser.format_il_phone_number(phone))
         if not self.exists():
             raise UserNotExistError()
 
@@ -80,6 +96,7 @@ class DBUser(object):
         if not phone:
             raise PhoneMissingError()
 
+        phone = DBUser.format_il_phone_number(phone)
         user = fdb.users.find_one({'phone': phone})
         if not user:
             raise UserNotExistError()
@@ -92,10 +109,6 @@ class DBUser(object):
         }})
 
     def delete(self):
-        for group_name in self.groups():
-            group = Group(group_name)
-            group.remove_user(self._id)
-        fdb.bills.delete_many({'user': self._id})
         fdb.users.delete_one(self._selector)
 
     def exists(self):
@@ -111,9 +124,9 @@ class DBUser(object):
         return user
 
     def groups(self):
-        phone = self.data()['phone']
-        results = fdb.groups.find({'users': {'$all': [phone]}}, {'name': 1})
-        return [x['name'] for x in results]
+        phone = DBUser.format_il_phone_number(self.data()['phone'])
+        results = fdb.groups.find({'users': {'$all': [phone]}})
+        return [x for x in results]
 
 
 class Group(object):
@@ -157,10 +170,11 @@ class Group(object):
 
     def add_user(self, id):
         user = DBUser(id)
-        phone = user.data()['phone']
+        phone = DBUser.format_il_phone_number(user.data()['phone'])
         self.add_user_by_phone(phone)
 
     def add_user_by_phone(self, phone):
+        phone = DBUser.format_il_phone_number(phone)
         if self.has_user(phone):
             raise UserAlreadyInGroupError('Cannot add the same user twice.')
 
@@ -172,13 +186,14 @@ class Group(object):
         self.remove_user_by_phone(phone)
 
     def remove_user_by_phone(self, phone):
+        phone = DBUser.format_il_phone_number(phone)
         if not self.has_user(phone):
             raise UserNotInGroupError()
 
         fdb.groups.update(self._selector, {'$pull': {'users': phone}})
 
     def has_user(self, phone):
-        return phone in self.data()['users']
+        return DBUser.format_il_phone_number(phone) in self.data()['users']
 
     def get_users(self):
         return [DBUser.from_phone(phone) for phone in self.data()['users']]
@@ -202,7 +217,3 @@ class Group(object):
 
     def get_user_balance(self, id):
         return sum([b['amount'] for b in self.get_user_bill_history(id)])
-
-    def delete(self):
-        fdb.groups.delete_one(self._selector)
-        fdb.bills.delete_many({'group': self._name})
