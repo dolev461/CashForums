@@ -2,6 +2,10 @@ import time
 import pymongo
 from config import config
 
+# Example: +972521231234
+PHONE_LENGTH = 13
+
+
 dbclient = pymongo.MongoClient(config['MONGODB_URL'])
 fdb = dbclient.forums
 
@@ -19,6 +23,10 @@ class UserNameMissingError(Exception):
 
 
 class PhoneMissingError(Exception):
+    pass
+
+
+class InvalidPhoneError(Exception):
     pass
 
 
@@ -65,6 +73,7 @@ class DBUser(object):
     def from_phone(phone):
         user = fdb.users.find_one(
             {'phone': DBUser.format_il_phone_number(phone)})
+
         if not user:
             raise UserNotExistError()
 
@@ -73,13 +82,22 @@ class DBUser(object):
     @staticmethod
     def format_il_phone_number(phone):
         phone = phone.replace("-", "")
-        if phone.startswith('+972'):
-            return phone
+
         if phone.startswith('972'):
-            return '+{}'.format(phone)
-        if phone.startswith('0'):
-            return '+972{}'.format(phone.lstrip('0'))
-        return '+972{}'.format(phone)
+            phone = '+{}'.format(phone)
+        elif phone.startswith('0'):
+            phone = '+972{}'.format(phone.lstrip('0'))
+
+        if not phone.startswith('+972'):
+            phone = '+972{}'.format(phone)
+
+        if len(phone) != PHONE_LENGTH:
+            raise InvalidPhoneError()
+
+        if not phone.replace("+", "").isdigit():
+            raise InvalidPhoneError()
+
+        return phone
 
     def __init__(self, id, create=False, phone=None):
         self._id = id

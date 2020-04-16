@@ -8,6 +8,7 @@ WELCOME_MSG = ("שלום, אני בוט.\n"
                "שנייה סורק אותך...")
 ADD_PREFIX = "add_"
 REMOVE_PREFIX = "remove_"
+INFO_PREFIX = "info_"
 
 
 manager = bot_manager.BotManager()
@@ -53,7 +54,7 @@ def process_phone_number(message):
     try:
         manager.add_user(chat_id, message.contact.phone_number)
         end_subscription(message, chat_id)
-    except bot_manager.UserNotInvited:
+    except bot_manager.UserNotInvitedError:
         bot.send_message(
             chat_id,
             "לא הוזמנת :(\nהאחראי פורומים זה הכתובת שלך")
@@ -214,20 +215,26 @@ def end_add_member(chat_id):
         return
 
     try:
-        manager.add_user_by_phone(
-            manager.pending_user["phone"],
-            manager.pending_user["name"])
-    except bot_manager.UserAlreadyExistsError:
-        pass
+        try:
+            manager.add_user_by_phone(
+                manager.pending_user["phone"],
+                manager.pending_user["name"])
+        except bot_manager.UserAlreadyExistsError:
+            pass
 
-    try:
-        manager.add_member(
-            manager.pending_user["group"],
-            manager.pending_user["phone"])
-    except bot_manager.UserAlreadyInGroupError:
-        bot.send_message(chat_id, "המספר טלפון כבר קיים בקבוצה")
-    else:
-        bot.send_message(chat_id, "תודה!")
+        try:
+            manager.add_member(
+                manager.pending_user["group"],
+                manager.pending_user["phone"])
+        except bot_manager.UserAlreadyInGroupError:
+            bot.send_message(chat_id, "המספר טלפון כבר קיים בקבוצה")
+        else:
+            bot.send_message(chat_id, "תודה!")
+    except bot_manager.InvalidPhoneError:
+        bot.send_message(
+            chat_id,
+            "זה לא מספר לגיטימי בכלל 📱"
+        )
 
     manager.clear_pending_user()
 
@@ -268,6 +275,11 @@ def process_remove_member_phone(message):
         manager.remove_member(manager.pending_user["group"], phone)
     except bot_manager.UserNotInGroupError:
         bot.send_message(chat_id, "המספר טלפון לא נמצא בקבוצה בכלל... מה?")
+    except bot_manager.InvalidPhoneError:
+        bot.send_message(
+            chat_id,
+            "זה לא מספר לגיטימי בכלל 📱"
+        )
     else:
         bot.send_message(chat_id, "ההדחה הושלמה.")
 
@@ -294,21 +306,26 @@ def start_group_info(message):
         send_group_info(chat_id, groups.pop())
     else:
         ask_for_group(chat_id, "מה הקבוצה שאנחנו מחפשים?")
-        bot.register_next_step_handler(message, process_add_group_choice)
 
 
-def process_group_info(message):
+@bot.callback_query_handler(func=lambda query: query.data.startswith(INFO_PREFIX))
+def process_group_info(call):
+    chat_id = call.message.chat.id
+    group = call.data.replace(ADD_PREFIX, "", 1)
     if process_group_choice(
-            message,
+            chat_id,
+            group,
             "נמצאה הקבוצה!"):
-        send_group_info(message.chat.id, message.text)
+        send_group_info(chat_id, group)
 
 
 def send_group_info(chat_id, group):
-    # TODO sort by money
     balances = manager.get_all_users_balances(group)
+    # Sort by money
     msg = "\n".join(["{}: {}".format(name, amount)
-                     for name, amount in balances.items()])
+                     for name, amount in sorted(
+                     balances.items(),
+                     key=lambda item: item[1])])
 
     bot.send_message(chat_id, msg)
 
@@ -355,10 +372,9 @@ def process_group_create_admin(message):
     chat_id = message.chat.id
     gname = manager.pending_group['name']
     if message.contact is not None:
-        phone = bot_manager.BotManager.format_il_phone_number(
-            message.contact.phone_number)
+        phone = message.contact.phone_number
     else:
-        phone = bot_manager.BotManager.format_il_phone_number(message.text)
+        phone = message.text
 
     try:
         user = manager.get_user_from_phone(phone)
@@ -374,10 +390,15 @@ def process_group_create_admin(message):
             "יצירת הקבוצה נכשלה, לא הצלחתי למצוא את המספר {} במערכת.".format(
                 phone)
         )
-    except bot_manager.GroupAlreadyExists:
+    except bot_manager.GroupAlreadyExistsError:
         bot.send_message(
             chat_id,
             "הקבוצה {} כבר קיימת 🤦‍♀️".format(gname)
+        )
+    except bot_manager.InvalidPhoneError:
+        bot.send_message(
+            chat_id,
+            "זה לא מספר לגיטימי בכלל 📱"
         )
 
 # Handle '/grouprm'

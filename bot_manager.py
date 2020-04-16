@@ -19,15 +19,19 @@ class UserNotExistError(Exception):
     pass
 
 
-class UserNotInvited(Exception):
+class UserNotInvitedError(Exception):
     pass
 
 
-class GroupAlreadyExists(Exception):
+class GroupAlreadyExistsError(Exception):
     pass
 
 
 class GroupNotExistError(Exception):
+    pass
+
+
+class InvalidPhoneError(Exception):
     pass
 
 
@@ -89,6 +93,8 @@ class BotManager(object):
             return db.DBUser.from_phone(phone)
         except db.UserNotExistError:
             raise UserNotExistError()
+        except db.InvalidPhoneError:
+            raise InvalidPhoneError()
 
     def is_user_exists(self, chat_id):
         try:
@@ -100,9 +106,9 @@ class BotManager(object):
 
     def create_group(self, name, admin):
         try:
-            g = db.Group(name, create=True, admin=admin)
+            db.Group(name, create=True, admin=admin)
         except db.GroupAlreadyExistsError:
-            raise GroupAlreadyExists()
+            raise GroupAlreadyExistsError()
 
     def add_user(self, chat_id, phone_number):
         try:
@@ -111,13 +117,17 @@ class BotManager(object):
                 phone=phone_number,
                 create=True)
         except db.UserNotExistError:
-            raise UserNotInvited()
+            raise UserNotInvitedError()
+        except db.InvalidPhoneError:
+            raise InvalidPhoneError()
 
     def add_user_by_phone(self, phone_number, name):
         try:
             db.DBUser.create_pending_user(phone_number, name)
         except db.UserAlreadyExistsError:
             raise UserAlreadyExistsError()
+        except db.InvalidPhoneError:
+            raise InvalidPhoneError()
 
     def add_member(self, group_name, phone):
         group = db.Group(group_name)
@@ -125,6 +135,8 @@ class BotManager(object):
             group.add_user_by_phone(phone)
         except db.UserAlreadyInGroupError:
             raise UserAlreadyExistsError()
+        except db.InvalidPhoneError:
+            raise InvalidPhoneError()
 
     def remove_member(self, group_name, phone):
         group = db.Group(group_name)
@@ -132,6 +144,8 @@ class BotManager(object):
             group.remove_user_by_phone(phone)
         except db.UserNotInGroupError:
             raise UserNotInGroupError()
+        except db.InvalidPhoneError:
+            raise InvalidPhoneError()
 
     def get_admin_groups(self, chat_id):
         user = self.get_user(chat_id)
