@@ -9,6 +9,7 @@ WELCOME_MSG = ("שלום, אני בוט.\n"
 ADD_PREFIX = "add_"
 REMOVE_PREFIX = "remove_"
 INFO_PREFIX = "info_"
+MEMBER_RM_PREFIX = "memberrm_"
 
 
 manager = bot_manager.BotManager()
@@ -101,13 +102,13 @@ def ask_for_group(chat_id, text, callback_prefix=""):
         reply_markup=markup)
 
 
-def process_group_choice(chat_id, group, success_text):
-    markup = ReplyKeyboardRemove(selective=False)
+def process_group_choice(chat_id, group, success_text, markup=None):
+    fail_markup = ReplyKeyboardRemove(selective=False)
     if not manager.is_group_admin(chat_id, group):
         bot.send_message(
             chat_id,
             "את/ה לא המנהל/ת של הקבוצה!",
-            reply_markup=markup)
+            reply_markup=fail_markup)
         return False
 
     bot.send_message(
@@ -177,12 +178,16 @@ def start_add_member(message):
 def process_add_group_choice(call):
     chat_id = call.message.chat.id
     group = call.data.replace(ADD_PREFIX, "", 1)
-    if process_group_choice(
-            chat_id,
-            group,
-            "מה השם של הבחור/ה החדש/ה?\nניתן לשתף איש קשר ;)"):
-        manager.pending_user["group"] = group
-        bot.register_next_step_handler(call.message, process_member_name)
+
+    if not manager.is_group_admin(chat_id, group):
+        raise Exception()
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        chat_id,
+        "מה השם של הבחור/ה החדש/ה?\nניתן לשתף איש קשר ;)")
+    manager.pending_user["group"] = group
+    bot.register_next_step_handler(call.message, process_member_name)
 
 
 def process_member_name(message):
@@ -253,35 +258,34 @@ def remove_member(message):
 def process_remove_group_choice(call):
     chat_id = call.message.chat.id
     group = call.data.replace(REMOVE_PREFIX, "", 1)
-    if process_group_choice(
-            chat_id,
-            group,
-            "מה המספר של המודח/ת?\nניתן לשתף איש קשר ;)"):
-        manager.pending_user["group"] = group
-        bot.register_next_step_handler(
-            call.message,
-            process_remove_member_phone)
+    if not manager.is_group_admin(chat_id, group):
+        raise Exception()
+
+    manager.pending_user["group"] = group
+    markup = InlineKeyboardMarkup(row_width=1)
+    buttons = []
+    for user in manager.get_group(group).get_users():
+        buttons.append(InlineKeyboardButton(
+            user["name"],
+            callback_data="{}{}".format(MEMBER_RM_PREFIX, user["phone"])))
+
+    markup.add(*buttons)
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        chat_id,
+        "בחר\י את המודח\ת שלך 🔥",
+        reply_markup=markup)
 
 
-def process_remove_member_phone(message):
-    chat_id = message.chat.id
-    phone = ""
-    if message.contact is not None:
-        phone = message.contact.phone_number
-    else:
-        phone = message.text
+@bot.callback_query_handler(func=lambda query: query.data.startswith(MEMBER_RM_PREFIX))
+def process_remove_member(call):
+    chat_id = call.message.chat.id
+    phone = call.data.replace(MEMBER_RM_PREFIX, "")
+    name = manager.get_user(chat_id).data()["name"]
 
-    try:
-        manager.remove_member(manager.pending_user["group"], phone)
-    except bot_manager.UserNotInGroupError:
-        bot.send_message(chat_id, "המספר טלפון לא נמצא בקבוצה בכלל... מה?")
-    except bot_manager.InvalidPhoneError:
-        bot.send_message(
-            chat_id,
-            "זה לא מספר לגיטימי בכלל 📱"
-        )
-    else:
-        bot.send_message(chat_id, "ההדחה הושלמה.")
+    manager.remove_member(manager.pending_user["group"], phone)
+    bot.send_message(chat_id, "בה ביי {}. בהצלחה!".format(name))
+    bot.answer_callback_query(call.id)
 
     manager.clear_pending_user()
 
