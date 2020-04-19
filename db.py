@@ -216,17 +216,21 @@ class Group(object):
     def get_users(self):
         return [DBUser.from_phone(phone) for phone in self.data()['users']]
 
-    def bill_user(self, id, amount):
-        user = DBUser(id)
+    def bill_user(self, uid, amount):
+        user = DBUser(uid)
         phone = user.data()['phone']
+        self.bill_user_by_phone(phone, amount)
 
+    def bill_user_by_phone(self, phone, amount):
         if not self.has_user(phone):
             raise UserNotInGroupError()
 
+        user = DBUser.from_phone(phone)
+        uid = user["id"]
         fdb.bills.insert_one({
-            'user': id,
+            'user': uid,
             'group': self._name,
-            'amount': amount,
+            'amount': int(amount),
             'time': time.time()
         })
 

@@ -10,6 +10,8 @@ ADD_PREFIX = "add_"
 REMOVE_PREFIX = "remove_"
 INFO_PREFIX = "info_"
 MEMBER_RM_PREFIX = "memberrm_"
+BILL_PREFIX = "bill_"
+MEMBER_BILL_PREFIX = "memberbill_"
 
 
 manager = bot_manager.BotManager()
@@ -66,7 +68,9 @@ def end_subscription(message, chat_id):
     markup = ReplyKeyboardRemove(selective=False)
     bot.send_message(
         chat_id,
-        "הסריקה הושלמה! :)\nשלום {}!".format(user.data()['name']),
+        "הסריקה הושלמה! :)\nשלום {}!"
+        "\nבבקשה תכתוב /help בשביל לראות מה אני מסוגל לעשות.".format(
+            user.data()['name']),
         reply_markup=markup)
 
 
@@ -119,6 +123,19 @@ def process_group_choice(chat_id, group, success_text, markup=None):
     return True
 
 
+def create_members_markup(group, callback_prefix=""):
+    markup = InlineKeyboardMarkup(row_width=1)
+    buttons = []
+    for user in manager.get_group(group).get_users():
+        buttons.append(InlineKeyboardButton(
+            user["name"],
+            callback_data="{}{}".format(callback_prefix, user["phone"])))
+
+    markup.add(*buttons)
+
+    return markup
+
+
 #################
 # User Commands #
 #################
@@ -126,13 +143,17 @@ def process_group_choice(chat_id, group, success_text, markup=None):
 @bot.message_handler(commands=['help'])
 def send_help(message):
     chat_id = message.chat.id
-    bot.send_message(chat_id, manager.get_help(chat_id))
+    bot.send_message(
+        chat_id,
+        "היי, אני בוט וזה מה שאני יכול לעשות:",
+        reply_markup=manager.get_help(chat_id))
 
 
-# Handle '/info'
-@bot.message_handler(commands=['info'])
-def send_info(message):
+@bot.callback_query_handler(func=lambda query: query.data.startswith(manager.CB_INFO))
+def info(call):
+    message = call.message
     chat_id = message.chat.id
+
     if not manager.is_user_exists(chat_id):
         return
 
@@ -160,18 +181,19 @@ def send_info(message):
     else:
         bot.send_message(chat_id, "לא מצאתי את הקבוצה שלך :(")
 
+    bot.answer_callback_query(call.id)
 
 ########################
 # Group Admin Commands #
 ########################
-# Handle '/add'
-@bot.message_handler(commands=["add"])
-def start_add_member(message):
-    chat_id = message.chat.id
+@bot.callback_query_handler(func=lambda query: query.data.startswith(manager.CB_ADD))
+def start_add_member(call):
+    chat_id = call.message.chat.id
     if not is_any_group_admin(chat_id):
         return
 
     ask_for_group(chat_id, "לאיפה להוסיף את הבחור/ה החדש/ה?", ADD_PREFIX)
+    bot.answer_callback_query(call.id)
 
 
 @bot.callback_query_handler(func=lambda query: query.data.startswith(ADD_PREFIX))
@@ -244,14 +266,14 @@ def end_add_member(chat_id):
     manager.clear_pending_user()
 
 
-# Handle '/rm'
-@bot.message_handler(commands=['rm'])
-def remove_member(message):
-    chat_id = message.chat.id
+@bot.callback_query_handler(func=lambda query: query.data.startswith(manager.CB_REMOVE))
+def remove_member(call):
+    chat_id = call.message.chat.id
     if not is_any_group_admin(chat_id):
         return
 
     ask_for_group(chat_id, "מאיזו קבוצה מתבצעת ההדחה? 😔", REMOVE_PREFIX)
+    bot.answer_callback_query(call.id)
 
 
 @bot.callback_query_handler(func=lambda query: query.data.startswith(REMOVE_PREFIX))
@@ -262,14 +284,7 @@ def process_remove_group_choice(call):
         raise Exception()
 
     manager.pending_user["group"] = group
-    markup = InlineKeyboardMarkup(row_width=1)
-    buttons = []
-    for user in manager.get_group(group).get_users():
-        buttons.append(InlineKeyboardButton(
-            user["name"],
-            callback_data="{}{}".format(MEMBER_RM_PREFIX, user["phone"])))
-
-    markup.add(*buttons)
+    markup = create_members_markup(group, MEMBER_RM_PREFIX)
     bot.answer_callback_query(call.id)
     bot.send_message(
         chat_id,
@@ -290,18 +305,65 @@ def process_remove_member(call):
     manager.clear_pending_user()
 
 
-# Handle '/bill'
-@bot.message_handler(commands=['bill'])
-def start_bill(message):
-    chat_id = message.chat.id
+@bot.callback_query_handler(func=lambda query: query.data.startswith(manager.CB_BILL))
+def start_bill(call):
+    chat_id = call.message.chat.id
     if not is_any_group_admin(chat_id):
         return
 
+    ask_for_group(chat_id, "מאיזו קבוצה מתבצע החיוב? 💳", BILL_PREFIX)
+    bot.answer_callback_query(call.id)
 
-# Handle '/groupinfo'
-@bot.message_handler(commands=['groupinfo'])
-def start_group_info(message):
+
+@bot.callback_query_handler(func=lambda query: query.data.startswith(BILL_PREFIX))
+def process_bill_member_choice(call):
+    chat_id = call.message.chat.id
+    group = call.data.replace(BILL_PREFIX, "", 1)
+    if not manager.is_group_admin(chat_id, group):
+        raise Exception()
+
+    manager.pending_user["group"] = group
+    markup = create_members_markup(group, MEMBER_BILL_PREFIX)
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        chat_id,
+        "בחר\י את מי לחייב 🤑",
+        reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda query: query.data.startswith(MEMBER_BILL_PREFIX))
+def process_bill_amount(call):
+    chat_id = call.message.chat.id
+    phone = call.data.replace(MEMBER_BILL_PREFIX, "")
+    name = manager.get_user(chat_id).data()["name"]
+    manager.pending_user["phone"] = phone
+    manager.pending_user["name"] = name
+
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        chat_id,
+        "הכנס סכום לחיוב ובבקשה לא לטעות זה חשוב 😅")
+    bot.register_next_step_handler(call.message, process_bill_member)
+
+
+def process_bill_member(message):
     chat_id = message.chat.id
+    if not message.text.isdigit():
+        bot.send_message(
+            chat_id,
+            "זה אפילו לא מספר 😒")
+        return
+
+    manager.bill_member(
+        manager.pending_user["group"],
+        manager.pending_user["phone"],
+        message.text)
+    manager.clear_pending_user()
+
+
+@bot.callback_query_handler(func=lambda query: query.data.startswith(manager.CB_GROUP_INFO))
+def start_group_info(call):
+    chat_id = call.message.chat.id
     if not is_any_group_admin(chat_id):
         return
 
@@ -310,6 +372,8 @@ def start_group_info(message):
         send_group_info(chat_id, groups.pop())
     else:
         ask_for_group(chat_id, "מה הקבוצה שאנחנו מחפשים?")
+
+    bot.answer_callback_query(call.id)
 
 
 @bot.callback_query_handler(func=lambda query: query.data.startswith(INFO_PREFIX))
@@ -337,9 +401,9 @@ def send_group_info(chat_id, group):
 ##################
 # Admin Commands #
 ##################
-# Handle '/groupadd'
-@bot.message_handler(commands=['groupadd'])
-def start_group_create(message):
+@bot.callback_query_handler(func=lambda query: query.data.startswith(manager.CB_GROUP_ADD))
+def start_group_create(call):
+    message = call.message
     chat_id = message.chat.id
     user = manager.get_user(chat_id)
     if not user.data()['admin']:
@@ -352,6 +416,7 @@ def start_group_create(message):
         message,
         "איך לקרוא לקבוצה?"
     )
+    bot.answer_callback_query(call.id)
     bot.register_next_step_handler(message, process_group_create)
 
 
@@ -405,9 +470,10 @@ def process_group_create_admin(message):
             "זה לא מספר לגיטימי בכלל 📱"
         )
 
-# Handle '/grouprm'
-@bot.message_handler(commands=['grouprm'])
-def start_group_delete(message):
+
+@bot.callback_query_handler(func=lambda query: query.data.startswith(manager.CB_GROUP_RM))
+def start_group_delete(call):
+    message = call.message
     chat_id = message.chat.id
     user = manager.get_user(chat_id)
     if not user.data()['admin']:
@@ -420,6 +486,7 @@ def start_group_delete(message):
         message,
         "מה שם הקבוצה שצריך למחוק? 🤔"
     )
+    bot.answer_callback_query(call.id)
     bot.register_next_step_handler(message, process_group_delete)
 
 
@@ -443,12 +510,7 @@ def process_group_delete(message):
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
-    if call.data == "cb_yes":
-        bot.answer_callback_query(call.id, "Answer is Yes")
-    elif call.data == "cb_no":
-        bot.answer_callback_query(call.id, "Answer is No")
-    else:
-        bot.answer_callback_query(call.id, "אין קבוצה כזאת")
+    bot.answer_callback_query(call.id, "לא הבנתי... ביפ בופ...")
 
 
 def main():

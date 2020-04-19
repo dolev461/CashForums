@@ -1,6 +1,7 @@
 import telebot
 import config
 import db
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 class UserAlreadyExistsError(Exception):
@@ -37,6 +38,14 @@ class InvalidPhoneError(Exception):
 
 class BotManager(object):
     SAVE_NEXT_STEP_DELAY = 2  # Seconds
+    CB_INFO = "cmd_info_"
+    CB_ADD = "cmd_add_"
+    CB_REMOVE = "cmd_remove_"
+    CB_INFO = "cmd_info_"
+    CB_BILL = "cmd_bill_"
+    CB_GROUP_INFO = "cmd_group_info_"
+    CB_GROUP_ADD = "cmd_group_add_"
+    CB_GROUP_RM = "cmd_group_RM_"
 
     def __init__(self):
         self.bot = telebot.TeleBot(config.config['API_TOKEN'])
@@ -50,21 +59,41 @@ class BotManager(object):
             "name": None,
             "admin": None,
         }
+        # "/start": "Start - Register your telegram account to the bot",
+        # "/help": "Help - Show this help section",
         self._commands = {
-            "/start": "Register your telegram account to the bot",
-            "/help": "Show this help section",
-            "/info": "Get your balance in your associated groups"
+            InlineKeyboardButton(
+                "ℹ מידע",
+                callback_data=self.CB_INFO
+            ): "Info - Get your balance in your associated groups",
         }
         self._group_admin_commands = {
-            "/add": "Group admin command to add members",
-            "/rm": "Group admin command to remove members",
-            "/members": "Group admin command to display all group members",
-            "/bill": "Group admin command to bill a user",
-            "/groupinfo": "Group admin command to see all members info"
+            InlineKeyboardButton(
+                "➕ הוספת חבר\ת קבוצה",
+                callback_data=self.CB_ADD
+            ): "Add - Group admin command to add members",
+            InlineKeyboardButton(
+                "➖ הסרת חבר\ת קבוצה",
+                callback_data=self.CB_REMOVE
+            ): "Rm - Group admin command to remove members",
+            InlineKeyboardButton(
+                "⁉ מידע על הקבוצה",
+                callback_data=self.CB_GROUP_INFO
+            ): "Group admin command to display all group members info",
+            InlineKeyboardButton(
+                "💸 חיוב",
+                callback_data=self.CB_BILL
+            ): "Group admin command to bill a user",
         }
         self._admin_commands = {
-            "/groupadd": "Admin command to create a new group",
-            "/grouprm": "Admin command to remove a group"
+            InlineKeyboardButton(
+                "⭕ הוספת קבוצה",
+                callback_data=self.CB_GROUP_ADD
+            ): "Admin command to create a new group",
+            InlineKeyboardButton(
+                "❌ הסרת קבוצה",
+                callback_data=self.CB_GROUP_RM
+            ): "Admin command to remove a group"
         }
 
     def clear_pending_user(self):
@@ -147,6 +176,15 @@ class BotManager(object):
         except db.InvalidPhoneError:
             raise InvalidPhoneError()
 
+    def bill_member(self, group_name, phone, amount):
+        group = db.Group(group_name)
+        try:
+            group.bill_user_by_phone(phone, amount)
+        except db.UserNotInGroupError:
+            raise UserNotInGroupError()
+        except db.InvalidPhoneError:
+            raise InvalidPhoneError()
+
     def get_admin_groups(self, chat_id):
         user = self.get_user(chat_id)
         admin_groups = []
@@ -162,6 +200,7 @@ class BotManager(object):
         return group_name in self.get_admin_groups(chat_id)
 
     def get_help(self, chat_id):
+        markup = InlineKeyboardMarkup(row_width=1)
         commands = self._commands.copy()
 
         try:
@@ -175,16 +214,17 @@ class BotManager(object):
         except UserNotExistError:
             pass
 
-        return "\n".join(
-            ["{}: {}".format(cmd, desc)
-             for cmd, desc in commands.items()])
+        markup.add(*commands)
+
+        return markup
 
     def get_user_balances(self, chat_id):
         user = self.get_user(chat_id)
         groups = user.groups()
 
         balances = {}
-        for group_name in groups:
+        for group_dict in groups:
+            group_name = group_dict["name"]
             group = db.Group(group_name)
             balance = group.get_user_balance(chat_id)
             balances[group_name] = -balance
