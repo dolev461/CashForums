@@ -45,6 +45,7 @@ class BotManager(object):
     CB_INFO = "cmd_info_"
     CB_ADD = "cmd_add_"
     CB_REMOVE = "cmd_remove_"
+    CB_DISABLE = "cmd_disable_"
     CB_INFO = "cmd_info_"
     CB_BILL = "cmd_bill_"
     CB_REFUND = "cmd_refund_"
@@ -81,6 +82,10 @@ class BotManager(object):
                 "➖ הסרת חבר\ת קבוצה",
                 callback_data=self.CB_REMOVE
             ): "Rm - Group admin command to remove members",
+            InlineKeyboardButton(
+                "❄ הקפאה\החזר חבר\ת קבוצה",
+                callback_data=self.CB_DISABLE
+            ): "Rm - Group admin command to disable members",
             InlineKeyboardButton(
                 "⁉ מידע על הקבוצה",
                 callback_data=self.CB_GROUP_INFO
@@ -187,6 +192,20 @@ class BotManager(object):
         except db.InvalidPhoneError:
             raise InvalidPhoneError()
 
+    def toggle_disable_member(self, group_name, phone):
+        group = self.get_group(group_name)
+        data = group.data()
+
+        try:
+            if 'disabled' in data and phone in data['disabled']:
+                group.active_user_by_phone(phone)
+            else:
+                group.disable_user_by_phone(phone)
+        except db.UserNotInGroupError:
+            raise UserNotInGroupError()
+        except db.InvalidPhoneError:
+            raise InvalidPhoneError()
+
     def bill_member(self, group_name, phone, amount):
         group = self.get_group(group_name)
 
@@ -231,6 +250,9 @@ class BotManager(object):
         markup.add(*commands)
 
         return markup
+
+    def get_disabled_users(self, group_name):
+        return self.get_group(group_name).get_disabled_users()
 
     def get_user_balances(self, chat_id):
         user = self.get_user(chat_id)

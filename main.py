@@ -9,10 +9,12 @@ WELCOME_MSG = ("שלום, אני בוט.\n"
                "שנייה סורק אותך...")
 ADD_PREFIX = "add_"
 REMOVE_PREFIX = "remove_"
+DISABLE_PREFIX = "disable_"
 INFO_PREFIX = "info_"
-MEMBER_RM_PREFIX = "memberrm_"
 BILL_PREFIX = "bill_"
 REFUND_PREFIX = "refund_"
+MEMBER_RM_PREFIX = "memberrm_"
+MEMBER_DISABLE_PREFIX = "memberdisable_"
 MEMBER_BILL_PREFIX = "memberbill_"
 MEMBER_REFUND_PREFIX = "memberrefund_"
 
@@ -303,7 +305,7 @@ def process_remove_group_choice(call):
 @bot.callback_query_handler(func=lambda query: query.data.startswith(MEMBER_RM_PREFIX))
 def process_remove_member(call):
     chat_id = call.message.chat.id
-    if manager.pending_group["group"] is None:
+    if manager.pending_user["group"] is None:
         bot.send_message(chat_id, "לא נבחרה קבוצה להדחה -_-")
         bot.answer_callback_query(call.id)
         return
@@ -313,6 +315,51 @@ def process_remove_member(call):
 
     manager.remove_member(manager.pending_user["group"], phone)
     bot.send_message(chat_id, "בה ביי {}. בהצלחה!".format(name))
+    bot.answer_callback_query(call.id)
+
+    manager.clear_pending_user()
+
+
+@bot.callback_query_handler(func=lambda query: query.data.startswith(manager.CB_DISABLE))
+def disable_member(call):
+    chat_id = call.message.chat.id
+    if not is_any_group_admin(chat_id):
+        return
+
+    ask_for_group(chat_id, "מאיזו קבוצה מתבצעת ההקפאה? 😔", DISABLE_PREFIX)
+    bot.answer_callback_query(call.id)
+
+
+@bot.callback_query_handler(func=lambda query: query.data.startswith(DISABLE_PREFIX))
+def process_disable_group_choice(call):
+    chat_id = call.message.chat.id
+    group = call.data.replace(DISABLE_PREFIX, "", 1)
+    if not manager.is_group_admin(chat_id, group):
+        raise Exception()
+
+    manager.pending_user["group"] = group
+    markup = create_members_markup(group, MEMBER_DISABLE_PREFIX)
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        chat_id,
+        "בחר\י את המוקפא\ת שלך 🥶",
+        reply_markup=markup)
+
+
+@bot.callback_query_handler(func=lambda query: query.data.startswith(MEMBER_DISABLE_PREFIX))
+def process_disable_member(call):
+    chat_id = call.message.chat.id
+    if manager.pending_user["group"] is None:
+        bot.send_message(chat_id, "לא נבחרה קבוצה להקפאה -_-")
+        bot.answer_callback_query(call.id)
+        return
+
+    phone = call.data.replace(MEMBER_DISABLE_PREFIX, "", 1)
+    name = manager.get_user_from_phone(phone)['name']
+
+    manager.toggle_disable_member(manager.pending_user["group"], phone)
+    bot.send_message(
+        chat_id, "{} אם חזרת תהנה, אחרת מחכים לשובך!".format(name))
     bot.answer_callback_query(call.id)
 
     manager.clear_pending_user()
@@ -432,14 +479,23 @@ def process_group_info(call):
 def send_group_info(chat_id, group):
     try:
         balances = manager.get_all_users_balances(group)
+        disabled = [user['name'] for user in manager.get_disabled_users(group)]
     except bot_manager.GroupNotExistError:
         bot.send_message(chat_id, "אני לא מכיר את הקבוצה: {}".format(group))
 
     # Sort by money
-    msg = "\n".join(["{} {}: {}".format("🟢" if amount >= 0 else "🔴", name, amount)
-                     for name, amount in sorted(
+    sorted_balances = sorted(
         balances.items(),
-        key=lambda item: item[1])])
+        key=lambda item: item[1])
+    disabled_balances = [
+        balance for balance in sorted_balances if balance[0] in disabled]
+    active_balances = [
+        balance for balance in sorted_balances if balance not in disabled_balances]
+
+    msg = "\n".join(["{} {}: {}".format("🟢" if amount >= 0 else "🔴", name, amount)
+                     for name, amount in active_balances] +
+                    ["{} {}: {}".format("⚫", name, amount)
+                     for name, amount in disabled_balances])
 
     bot.send_message(chat_id, msg)
 
@@ -468,7 +524,6 @@ def start_group_create(call):
 
 def process_group_create(message):
     chat_id = message.chat.id
-
     name = message.text
 
     bot.reply_to(
@@ -496,7 +551,7 @@ def process_group_create_admin(message):
         phone = message.text
 
     try:
-        user = manager.get_user_from_phone(phone)
+        manager.get_user_from_phone(phone)
         manager.create_group(gname, phone)
         manager.add_member(gname, phone)
         bot.send_message(
