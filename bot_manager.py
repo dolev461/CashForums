@@ -36,6 +36,10 @@ class InvalidPhoneError(Exception):
     pass
 
 
+class InvalidAmountError(Exception):
+    pass
+
+
 class BotManager(object):
     SAVE_NEXT_STEP_DELAY = 2  # Seconds
     CB_INFO = "cmd_info_"
@@ -43,6 +47,7 @@ class BotManager(object):
     CB_REMOVE = "cmd_remove_"
     CB_INFO = "cmd_info_"
     CB_BILL = "cmd_bill_"
+    CB_REFUND = "cmd_refund_"
     CB_GROUP_INFO = "cmd_group_info_"
     CB_GROUP_ADD = "cmd_group_add_"
     CB_GROUP_RM = "cmd_group_RM_"
@@ -84,6 +89,10 @@ class BotManager(object):
                 "💸 חיוב",
                 callback_data=self.CB_BILL
             ): "Group admin command to bill a user",
+            InlineKeyboardButton(
+                "🙇‍♂️ זיכוי כספי",
+                callback_data=self.CB_REFUND
+            ): "Group admin command to refund a user",
         }
         self._admin_commands = {
             InlineKeyboardButton(
@@ -159,7 +168,8 @@ class BotManager(object):
             raise InvalidPhoneError()
 
     def add_member(self, group_name, phone):
-        group = db.Group(group_name)
+        group = self.get_group(group_name)
+
         try:
             group.add_user_by_phone(phone)
         except db.UserAlreadyInGroupError:
@@ -168,7 +178,8 @@ class BotManager(object):
             raise InvalidPhoneError()
 
     def remove_member(self, group_name, phone):
-        group = db.Group(group_name)
+        group = self.get_group(group_name)
+
         try:
             group.remove_user_by_phone(phone)
         except db.UserNotInGroupError:
@@ -177,13 +188,16 @@ class BotManager(object):
             raise InvalidPhoneError()
 
     def bill_member(self, group_name, phone, amount):
-        group = db.Group(group_name)
+        group = self.get_group(group_name)
+
         try:
-            group.bill_user_by_phone(phone, amount)
+            group.bill_user_by_phone(phone, int(amount))
         except db.UserNotInGroupError:
             raise UserNotInGroupError()
         except db.InvalidPhoneError:
             raise InvalidPhoneError()
+        except ValueError:
+            raise InvalidAmountError()
 
     def get_admin_groups(self, chat_id):
         user = self.get_user(chat_id)
@@ -232,10 +246,7 @@ class BotManager(object):
         return balances
 
     def get_all_users_balances(self, group_name):
-        try:
-            group = db.Group(group_name)
-        except db.GroupNotExistError:
-            raise GroupNotExistError
+        group = self.get_group(group_name)
 
         balances = {}
         for user in group.get_users():

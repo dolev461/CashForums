@@ -226,16 +226,16 @@ class Group(object):
             raise UserNotInGroupError()
 
         user = DBUser.from_phone(phone)
-        uid = user["id"]
         fdb.bills.insert_one({
-            'user': uid,
+            'user': user["id"],
+            'name': user["name"],
             'group': self._name,
             'amount': int(amount),
             'time': time.time()
         })
 
-    def get_user_bill_history(self, id):
-        return [x for x in fdb.bills.find({'user': id, 'group': self._name})]
+    def get_user_bill_history(self, uid):
+        return [x for x in fdb.bills.find({'user': uid, 'group': self._name})]
 
     def get_user_balance(self, id):
         return sum([b['amount'] for b in self.get_user_bill_history(id)])

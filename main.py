@@ -1,6 +1,7 @@
 from telebot.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 import logging
 import bot_manager
+import functools
 
 
 WELCOME_MSG = ("שלום, אני בוט.\n"
@@ -11,7 +12,9 @@ REMOVE_PREFIX = "remove_"
 INFO_PREFIX = "info_"
 MEMBER_RM_PREFIX = "memberrm_"
 BILL_PREFIX = "bill_"
+REFUND_PREFIX = "refund_"
 MEMBER_BILL_PREFIX = "memberbill_"
+MEMBER_REFUND_PREFIX = "memberrefund_"
 
 
 manager = bot_manager.BotManager()
@@ -65,7 +68,8 @@ def process_phone_number(message):
 
 def end_subscription(message, chat_id):
     user = manager.get_user(chat_id)
-    markup = ReplyKeyboardRemove(selective=False)
+    markup = ReplyKeyboardMarkup(row_width=1)
+    markup.add(KeyboardButton("/help"))
     bot.send_message(
         chat_id,
         "הסריקה הושלמה! :)\nשלום {}!"
@@ -126,12 +130,15 @@ def process_group_choice(chat_id, group, success_text, markup=None):
 def create_members_markup(group, callback_prefix=""):
     markup = InlineKeyboardMarkup(row_width=1)
     buttons = []
-    for user in manager.get_group(group).get_users():
-        buttons.append(InlineKeyboardButton(
-            user["name"],
-            callback_data="{}{}".format(callback_prefix, user["phone"])))
+    try:
+        for user in manager.get_group(group).get_users():
+            buttons.append(InlineKeyboardButton(
+                user["name"],
+                callback_data="{}{}".format(callback_prefix, user["phone"])))
 
-    markup.add(*buttons)
+        markup.add(*buttons)
+    except bot_manager.GroupNotExistError:
+        pass
 
     return markup
 
@@ -239,6 +246,7 @@ def end_add_member(chat_id):
     if (manager.pending_user["name"] is None or
             manager.pending_user["phone"] is None or
             manager.pending_user["group"] is None):
+        bot.send_message(chat_id, "אני לא יודע לאיפה להוסיף 😢")
         return
 
     try:
@@ -295,6 +303,11 @@ def process_remove_group_choice(call):
 @bot.callback_query_handler(func=lambda query: query.data.startswith(MEMBER_RM_PREFIX))
 def process_remove_member(call):
     chat_id = call.message.chat.id
+    if manager.pending_group["group"] is None:
+        bot.send_message(chat_id, "לא נבחרה קבוצה להדחה -_-")
+        bot.answer_callback_query(call.id)
+        return
+
     phone = call.data.replace(MEMBER_RM_PREFIX, "")
     name = manager.get_user(chat_id).data()["name"]
 
@@ -305,59 +318,88 @@ def process_remove_member(call):
     manager.clear_pending_user()
 
 
-@bot.callback_query_handler(func=lambda query: query.data.startswith(manager.CB_BILL))
+@bot.callback_query_handler(func=lambda query: query.data.startswith(manager.CB_BILL) or query.data.startswith(manager.CB_REFUND))
 def start_bill(call):
     chat_id = call.message.chat.id
     if not is_any_group_admin(chat_id):
         return
 
-    ask_for_group(chat_id, "מאיזו קבוצה מתבצע החיוב? 💳", BILL_PREFIX)
+    if call.data.startswith(manager.CB_BILL):
+        ask_for_group(chat_id, "מאיזו קבוצה מתבצע החיוב? 💳", BILL_PREFIX)
+    else:  # Refund)
+        ask_for_group(chat_id, "מאיזו קבוצה מתבצע הזיכוי? 💳", REFUND_PREFIX)
+
     bot.answer_callback_query(call.id)
 
 
-@bot.callback_query_handler(func=lambda query: query.data.startswith(BILL_PREFIX))
+@bot.callback_query_handler(func=lambda query: query.data.startswith(BILL_PREFIX) or query.data.startswith(REFUND_PREFIX))
 def process_bill_member_choice(call):
     chat_id = call.message.chat.id
-    group = call.data.replace(BILL_PREFIX, "", 1)
+    group = call.data.replace(BILL_PREFIX, "", 1).replace(REFUND_PREFIX, "", 1)
     if not manager.is_group_admin(chat_id, group):
         raise Exception()
 
     manager.pending_user["group"] = group
-    markup = create_members_markup(group, MEMBER_BILL_PREFIX)
     bot.answer_callback_query(call.id)
-    bot.send_message(
-        chat_id,
-        "בחר\י את מי לחייב 🤑",
-        reply_markup=markup)
+    if call.data.startswith(BILL_PREFIX):
+        markup = create_members_markup(group, MEMBER_BILL_PREFIX)
+        bot.send_message(
+            chat_id,
+            "בחר\י את מי לחייב 🤑",
+            reply_markup=markup)
+    else:  # Refund
+        markup = create_members_markup(group, MEMBER_REFUND_PREFIX)
+        bot.send_message(
+            chat_id,
+            "בחר\י את מי לזכות 🤑",
+            reply_markup=markup)
 
 
-@bot.callback_query_handler(func=lambda query: query.data.startswith(MEMBER_BILL_PREFIX))
+@bot.callback_query_handler(func=lambda query: query.data.startswith(MEMBER_BILL_PREFIX) or query.data.startswith(MEMBER_REFUND_PREFIX))
 def process_bill_amount(call):
     chat_id = call.message.chat.id
-    phone = call.data.replace(MEMBER_BILL_PREFIX, "")
+    phone = call.data.replace(MEMBER_BILL_PREFIX, "", 1).replace(
+        MEMBER_REFUND_PREFIX, "", 1)
     name = manager.get_user(chat_id).data()["name"]
     manager.pending_user["phone"] = phone
     manager.pending_user["name"] = name
 
     bot.answer_callback_query(call.id)
-    bot.send_message(
-        chat_id,
-        "הכנס סכום לחיוב ובבקשה לא לטעות זה חשוב 😅")
-    bot.register_next_step_handler(call.message, process_bill_member)
+    if call.data.startswith(MEMBER_BILL_PREFIX):
+        bot.send_message(
+            chat_id,
+            "הכנס סכום לחיוב ובבקשה לא לטעות זה חשוב 😅")
+        bot.register_next_step_handler(call.message, process_bill_member)
+    else:  # Refund
+        bot.send_message(
+            chat_id,
+            "הכנס סכום לזיכוי ובבקשה לא לטעות זה חשוב 😅")
+        bot.register_next_step_handler(
+            call.message, functools.partial(process_bill_member, is_refund=True))
 
 
-def process_bill_member(message):
+def process_bill_member(message, is_refund=False):
     chat_id = message.chat.id
-    if not message.text.isdigit():
+    amount = message.text
+    if is_refund:
+        amount = "-" + amount
+
+    try:
+        manager.bill_member(
+            manager.pending_user["group"],
+            manager.pending_user["phone"],
+            amount)
+    except bot_manager.InvalidAmountError:
         bot.send_message(
             chat_id,
             "זה אפילו לא מספר 😒")
         return
+    except bot_manager.GroupNotExistError:
+        bot.send_message(
+            chat_id,
+            "אני לא זוכר איזו קבוצה לחייב 🥴"
+        )
 
-    manager.bill_member(
-        manager.pending_user["group"],
-        manager.pending_user["phone"],
-        message.text)
     manager.clear_pending_user()
 
 
@@ -388,12 +430,16 @@ def process_group_info(call):
 
 
 def send_group_info(chat_id, group):
-    balances = manager.get_all_users_balances(group)
+    try:
+        balances = manager.get_all_users_balances(group)
+    except bot_manager.GroupNotExistError:
+        bot.send_message(chat_id, "אני לא מכיר את הקבוצה: {}".format(group))
+
     # Sort by money
-    msg = "\n".join(["{}: {}".format(name, amount)
+    msg = "\n".join(["{} {}: {}".format("🟢" if amount >= 0 else "🔴", name, amount)
                      for name, amount in sorted(
-                     balances.items(),
-                     key=lambda item: item[1])])
+        balances.items(),
+        key=lambda item: item[1])])
 
     bot.send_message(chat_id, msg)
 
@@ -440,6 +486,10 @@ def process_group_create(message):
 def process_group_create_admin(message):
     chat_id = message.chat.id
     gname = manager.pending_group['name']
+    if gname is None:
+        bot.send_message(chat_id, "לא נבחר שם לקבוצה :(")
+        return
+
     if message.contact is not None:
         phone = message.contact.phone_number
     else:
