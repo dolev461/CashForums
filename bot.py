@@ -443,15 +443,23 @@ def process_bill_member(message, is_refund=False):
             manager.pending_user["group"],
             manager.pending_user["phone"],
             amount)
+
+        bot.send_message(
+            chat_id,
+            "מה שנעשה נעשה!")
     except bot_manager.InvalidAmountError:
         bot.send_message(
             chat_id,
             "זה אפילו לא מספר 😒")
-        return
     except bot_manager.GroupNotExistError:
         bot.send_message(
             chat_id,
             "אני לא זוכר איזו קבוצה לחייב 🥴"
+        )
+    except bot_manager.UserNotLoggedInError:
+        bot.send_message(
+            chat_id,
+            "חיבור ראשוני נדרש לפני התעסקות כלכלית בחשבון"
         )
 
     manager.clear_pending_user()

@@ -8,15 +8,15 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### Prerequisites
 
-What things you need to install the software and how to install them:
-
-`pip install pyTelegramBotAPI`
-`pip install pymongo[srv]`
-`pip install pymongo`
+What things you need to install the software and how to install them - see requirements.txt.
 
 ## Deployment
 
 `git push heroku master`
+
+### Debugging
+
+`heroku logs --tail`
 
 ## Authors
 

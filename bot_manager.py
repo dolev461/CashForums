@@ -25,6 +25,10 @@ class UserNotInvitedError(Exception):
     pass
 
 
+class UserNotLoggedInError(Exception):
+    pass
+
+
 class GroupAlreadyExistsError(Exception):
     pass
 
@@ -216,6 +220,8 @@ class BotManager(object):
             raise UserNotInGroupError()
         except db.InvalidPhoneError:
             raise InvalidPhoneError()
+        except db.UserNotLoggedInError:
+            raise UserNotLoggedInError()
         except ValueError:
             raise InvalidAmountError()
 

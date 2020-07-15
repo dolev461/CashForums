@@ -22,6 +22,10 @@ class UserNameMissingError(Exception):
     pass
 
 
+class UserNotLoggedInError(Exception):
+    pass
+
+
 class PhoneMissingError(Exception):
     pass
 
@@ -265,6 +269,9 @@ class Group(object):
             raise UserNotInGroupError()
 
         user = DBUser.from_phone(phone)
+        if 'id' not in user:
+            raise UserNotLoggedInError()
+
         fdb.bills.insert_one({
             'user': user["id"],
             'name': user["name"],
