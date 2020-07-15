@@ -1,4 +1,5 @@
 from telebot.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton, Update
+import os
 import functools
 import logging
 import flask
@@ -21,7 +22,7 @@ MEMBER_BILL_PREFIX = "memberbill_"
 MEMBER_REFUND_PREFIX = "memberrefund_"
 
 HOST = "0.0.0.0"
-PORT = 5000
+PORT = os.getenv("PORT", 5000)
 
 
 manager = bot_manager.BotManager()
