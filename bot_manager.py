@@ -1,6 +1,7 @@
 import telebot
 import config
 import db
+import logging
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
@@ -286,4 +287,8 @@ class BotManager(object):
         self.bot.enable_save_next_step_handlers(
             delay=self.SAVE_NEXT_STEP_DELAY)
         self.bot.load_next_step_handlers()
+
+        self.bot.remove_webhook()
+        self.bot.set_webhook(
+            "https://cash-forum.herokuapp.com/" + config.config["API_TOKEN"])
         self.bot.polling()

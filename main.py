@@ -619,7 +619,9 @@ def callback_query(call):
 
 
 def main():
+    print("CashForums telegram bot is up :)")
     manager.run()
+    print("The bot is down :(")
 
 
 if __name__ == "__main__":
