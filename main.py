@@ -1,7 +1,9 @@
-from telebot.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
-import logging
-import bot_manager
+from telebot.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton, Update
 import functools
+import logging
+import flask
+import bot_manager
+import config
 
 
 WELCOME_MSG = ("שלום, אני בוט.\n"
@@ -18,9 +20,13 @@ MEMBER_DISABLE_PREFIX = "memberdisable_"
 MEMBER_BILL_PREFIX = "memberbill_"
 MEMBER_REFUND_PREFIX = "memberrefund_"
 
+HOST = "0.0.0.0"
+PORT = 5000
+
 
 manager = bot_manager.BotManager()
 bot = manager.bot
+server = flask.Flask(__name__)
 
 
 ################
@@ -618,11 +624,22 @@ def callback_query(call):
     bot.answer_callback_query(call.id, "לא הבנתי... ביפ בופ...")
 
 
-def main():
-    print("CashForums telegram bot is up :)")
+@server.route("/" + config.config["API_TOKEN"], methods=["POST"])
+def get_message():
+    bot.process_new_updates(
+        [Update.de_json(flask.request.stream.read().decode("utf-8"))])
+
+    return "!", 200
+
+
+@server.route("/")
+def webhook():
+    logging.info("CashForums telegram bot is up :)")
     manager.run()
-    print("The bot is down :(")
+    logging.info("The bot is down :(")
+
+    return "!", 200
 
 
 if __name__ == "__main__":
-    main()
+    server.run(host=HOST, port=PORT)
