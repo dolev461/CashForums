@@ -289,6 +289,7 @@ class BotManager(object):
         self.bot.load_next_step_handlers()
 
         self.bot.remove_webhook()
+        self.bot.delete_webhook()
         self.bot.set_webhook(
             "https://cash-forum.herokuapp.com/" + config.config["API_TOKEN"])
         self.bot.polling()
