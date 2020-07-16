@@ -243,7 +243,7 @@ class Group(object):
         return DBUser.format_il_phone_number(phone) in self.data()['users']
 
     def get_users(self):
-        return self.data()['users']
+        return [DBUser.from_phone(phone) for phone in self.data()['users']]
 
     def get_disabled_users(self):
         return [DBUser.from_phone(phone) for phone in self.data()['disabled']]
