@@ -179,6 +179,9 @@ class Group(object):
         })
         return group
 
+    def delete(self):
+        fdb.groups.delete_one(self._selector)
+
     def exists(self):
         group = fdb.groups.find_one(self._selector)
         if not group:
