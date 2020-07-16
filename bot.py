@@ -648,7 +648,11 @@ def webhook():
 
 
 if __name__ == "__main__":
-    if os.getenv("DEBUG", False):
-        manager.run(debug=True)
-    else:
-        server.run(host=HOST, port=PORT)
+    try:
+        #os.environ["DEBUG"] = "TRUE"
+        if os.getenv("DEBUG", False):
+            manager.run(debug=True)
+        else:
+            server.run(host=HOST, port=PORT)
+    finally:
+        bot.remove_webhook()
