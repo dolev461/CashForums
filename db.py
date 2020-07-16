@@ -175,7 +175,7 @@ class Group(object):
             'name': self._name,
             'users': [],
             'disabled': [],
-            'admin': self._admin,
+            'admin': DBUser.format_il_phone_number(self._admin),
         })
         return group
 
