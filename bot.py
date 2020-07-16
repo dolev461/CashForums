@@ -1,4 +1,4 @@
-from telebot.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton, Update
+from telebot.types import KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, Update
 import os
 import functools
 import logging
@@ -58,10 +58,15 @@ def start_subscription(message):
 
 def process_phone_number(message):
     chat_id = message.chat.id
+
+    markup = ReplyKeyboardMarkup(row_width=1)
+    markup.add(KeyboardButton("/help"))
+
     if message.contact is None:
         bot.send_message(
             chat_id,
-            "אי אפשר להמשיך ככה... זה לא אני זה אתה!")
+            "אי אפשר להמשיך ככה... זה לא אני זה אתה!",
+            reply_markup=markup)
         # Try again
         bot.register_next_step_handler(message, process_phone_number)
         return
@@ -120,7 +125,8 @@ def ask_for_group(chat_id, text, callback_prefix=""):
 
 
 def process_group_choice(chat_id, group, success_text, markup=None):
-    fail_markup = ReplyKeyboardRemove(selective=False)
+    fail_markup = ReplyKeyboardMarkup(row_width=1)
+    fail_markup.add(KeyboardButton("/help"))
     if not manager.is_group_admin(chat_id, group):
         bot.send_message(
             chat_id,
