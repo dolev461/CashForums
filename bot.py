@@ -472,7 +472,7 @@ def start_group_info(call):
     if len(groups) == 1:
         send_group_info(chat_id, groups.pop())
     else:
-        ask_for_group(chat_id, "מה הקבוצה שאנחנו מחפשים?")
+        ask_for_group(chat_id, "מה הקבוצה שאנחנו מחפשים?", INFO_PREFIX)
 
     bot.answer_callback_query(call.id)
 
@@ -480,12 +480,15 @@ def start_group_info(call):
 @bot.callback_query_handler(func=lambda query: query.data.startswith(INFO_PREFIX))
 def process_group_info(call):
     chat_id = call.message.chat.id
-    group = call.data.replace(ADD_PREFIX, "", 1)
+
+    group = call.data.replace(INFO_PREFIX, "", 1)
     if process_group_choice(
             chat_id,
             group,
-            "נמצאה הקבוצה!"):
+            "פרטי הקבוצה {}:".format(group)):
         send_group_info(chat_id, group)
+
+    bot.answer_callback_query(call.id)
 
 
 def send_group_info(chat_id, group):
