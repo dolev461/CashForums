@@ -59,14 +59,10 @@ def start_subscription(message):
 def process_phone_number(message):
     chat_id = message.chat.id
 
-    markup = ReplyKeyboardMarkup(row_width=1)
-    markup.add(KeyboardButton("/help"))
-
     if message.contact is None:
         bot.send_message(
             chat_id,
-            "אי אפשר להמשיך ככה... זה לא אני זה אתה!",
-            reply_markup=markup)
+            "אי אפשר להמשיך ככה... זה לא אני זה אתה!")
         # Try again
         bot.register_next_step_handler(message, process_phone_number)
         return

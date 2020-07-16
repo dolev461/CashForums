@@ -1,4 +1,4 @@
-import time
+import datetime
 import pymongo
 from config import config
 
@@ -253,7 +253,7 @@ class Group(object):
         disabled = data['disabled']
         users = data['users']
 
-        return [DBUser.from_phone(phone) for phone in (set(users) - set(disable))]
+        return [DBUser.from_phone(phone) for phone in (set(users) - set(disabled))]
 
     def bill_user(self, uid, amount):
         user = DBUser(uid)
@@ -270,7 +270,7 @@ class Group(object):
             'name': user["name"],
             'group': self._name,
             'amount': int(amount),
-            'time': time.time()
+            'time': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         })
 
     def get_user_bill_history(self, phone):
