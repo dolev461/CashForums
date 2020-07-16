@@ -179,6 +179,15 @@ class Group(object):
         })
         return group
 
+    def delete(self):
+        group = fdb.groups.find_one(self._selector)
+        if not group:
+            raise GroupNotExistError()
+
+        fdb.groups.delete_one({
+            'name': self._name,
+        })
+
     def exists(self):
         group = fdb.groups.find_one(self._selector)
         if not group:

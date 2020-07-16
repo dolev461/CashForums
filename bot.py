@@ -11,6 +11,7 @@ WELCOME_MSG = ("שלום, אני בוט.\n"
                "אני אעזור לך להתמודד עם הלחץ הנפשי של הפורומים.\n\n"
                "שנייה סורק אותך...")
 ADD_PREFIX = "add_"
+DELETE_PREFIX = "delete_"
 REMOVE_PREFIX = "remove_"
 DISABLE_PREFIX = "disable_"
 INFO_PREFIX = "info_"
@@ -296,7 +297,7 @@ def remove_member(call):
 
 
 @bot.callback_query_handler(func=lambda query: query.data.startswith(REMOVE_PREFIX))
-def process_remove_group_choice(call):
+def process_remove_member_group_choice(call):
     chat_id = call.message.chat.id
     group = call.data.replace(REMOVE_PREFIX, "", 1)
     if not manager.is_group_admin(chat_id, group):
@@ -599,17 +600,25 @@ def start_group_delete(call):
             "זה רק לאדמינים הפיצ'ר הזה 😑")
         return
 
-    bot.reply_to(
-        message,
-        "מה שם הקבוצה שצריך למחוק? 🤔"
-    )
+    ask_for_group(chat_id, "איזו קבוצה תרצה למחוק? 🤔", DELETE_PREFIX)
     bot.answer_callback_query(call.id)
-    bot.register_next_step_handler(message, process_group_delete)
 
 
-def process_group_delete(message):
+@bot.callback_query_handler(func=lambda query: query.data.startswith(DELETE_PREFIX))
+def process_group_delete_choice(call):
+    chat_id = call.message.chat.id
+    name = call.data.replace(DELETE_PREFIX, "", 1)
+
+    bot.send_message(chat_id, f"אשר/י את מחיקת \"{name}\" בכתיבת \"כן\" בצ'אט.")
+    callback = functools.partial(process_group_delete_yes_no, name)
+    bot.register_next_step_handler(call.message, callback)
+
+def process_group_delete_yes_no(name, message):
     chat_id = message.chat.id
-    name = message.text
+
+    if message.text != 'כן':
+        bot.send_message(chat_id, "המחיקה התבטלה.")
+        return
 
     try:
         group = manager.get_group(name)
@@ -619,8 +628,8 @@ def process_group_delete(message):
             "הקבוצה נמחקה."
         )
     except bot_manager.GroupNotExistError:
-        bot.reply_to(
-            message,
+        bot.send_message(
+            chat_id,
             "אין קבוצה כזאת 🤦‍♀️, המחיקה נכשלה."
         )
 
