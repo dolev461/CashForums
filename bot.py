@@ -648,4 +648,7 @@ def webhook():
 
 
 if __name__ == "__main__":
-    server.run(host=HOST, port=PORT)
+    if os.getenv("DEBUG", False):
+        manager.run(debug=True)
+    else:
+        server.run(host=HOST, port=PORT)

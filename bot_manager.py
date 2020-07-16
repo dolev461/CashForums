@@ -282,11 +282,14 @@ class BotManager(object):
 
         return balances
 
-    def run(self):
+    def run(self, debug=False):
         self.bot.enable_save_next_step_handlers(
             delay=self.SAVE_NEXT_STEP_DELAY)
         self.bot.load_next_step_handlers()
 
-        self.bot.remove_webhook()
-        self.bot.set_webhook(
-            url="https://cash-forum.herokuapp.com/" + config.config["API_TOKEN"])
+        if debug:
+            self.bot.polling()
+        else:
+            self.bot.remove_webhook()
+            self.bot.set_webhook(
+                url=config.config["HEROKU_URL"] + config.config["API_TOKEN"])
