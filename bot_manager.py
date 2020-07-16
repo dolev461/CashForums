@@ -25,10 +25,6 @@ class UserNotInvitedError(Exception):
     pass
 
 
-class UserNotLoggedInError(Exception):
-    pass
-
-
 class GroupAlreadyExistsError(Exception):
     pass
 
@@ -220,8 +216,6 @@ class BotManager(object):
             raise UserNotInGroupError()
         except db.InvalidPhoneError:
             raise InvalidPhoneError()
-        except db.UserNotLoggedInError:
-            raise UserNotLoggedInError()
         except ValueError:
             raise InvalidAmountError()
 
@@ -280,10 +274,9 @@ class BotManager(object):
         balances = {}
         for user in group.get_users():
             name = user["name"]
-            balance = 0
-            if "id" in user:
-                user_id = user["id"]
-                balance = -group.get_user_balance(user_id)
+            phone = user["phone"]
+            # Positive bill means the user is in debt
+            balance = -group.get_user_balance_by_phone(phone)
 
             balances[name] = balance
 

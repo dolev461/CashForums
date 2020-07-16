@@ -22,10 +22,6 @@ class UserNameMissingError(Exception):
     pass
 
 
-class UserNotLoggedInError(Exception):
-    pass
-
-
 class PhoneMissingError(Exception):
     pass
 
@@ -247,7 +243,7 @@ class Group(object):
         return DBUser.format_il_phone_number(phone) in self.data()['users']
 
     def get_users(self):
-        return [DBUser.from_phone(phone) for phone in self.data()['users']]
+        return self.data()['users']
 
     def get_disabled_users(self):
         return [DBUser.from_phone(phone) for phone in self.data()['disabled']]
@@ -269,19 +265,26 @@ class Group(object):
             raise UserNotInGroupError()
 
         user = DBUser.from_phone(phone)
-        if 'id' not in user:
-            raise UserNotLoggedInError()
-
         fdb.bills.insert_one({
-            'user': user["id"],
+            'phone': phone,
             'name': user["name"],
             'group': self._name,
             'amount': int(amount),
             'time': time.time()
         })
 
-    def get_user_bill_history(self, uid):
-        return [x for x in fdb.bills.find({'user': uid, 'group': self._name})]
+    def get_user_bill_history(self, phone):
+        phone = DBUser.format_il_phone_number(phone)
+
+        return [x for x in fdb.bills.find({'phone': phone, 'group': self._name})]
 
     def get_user_balance(self, uid):
-        return sum([b['amount'] for b in self.get_user_bill_history(uid)])
+        user = DBUser(uid)
+        phone = user.data()['phone']
+
+        return self.get_user_balance_by_phone(phone)
+
+    def get_user_balance_by_phone(self, phone):
+        phone = DBUser.format_il_phone_number(phone)
+
+        return sum([b['amount'] for b in self.get_user_bill_history(phone)])

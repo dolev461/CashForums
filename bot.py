@@ -456,11 +456,6 @@ def process_bill_member(message, is_refund=False):
             chat_id,
             "אני לא זוכר איזו קבוצה לחייב 🥴"
         )
-    except bot_manager.UserNotLoggedInError:
-        bot.send_message(
-            chat_id,
-            "חיבור ראשוני נדרש לפני התעסקות כלכלית בחשבון"
-        )
 
     manager.clear_pending_user()
 
